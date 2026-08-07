@@ -63,6 +63,7 @@ public annotation class NestedBundle
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class FunctionOnly(val value: String)
 
+@Suppress("WRONG_ANNOTATION_TARGET")
 @InlineAnnotations
 @FunctionOnly("function-only constituent")
 @Target(AnnotationTarget.FUNCTION)
