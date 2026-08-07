@@ -7,7 +7,7 @@ Process reference: https://github.com/Kotlin/KEEP#contributing-use-cases-and-spe
 ## Before filing the Language Design issue
 
 - [ ] Make this prototype repository publicly readable, or move the proposal/prototype to a public repository that Kotlin maintainers can inspect.
-- [ ] Decide on an open-source license for the prototype before making it public.
+- [x] License the prototype for unrestricted reuse. The repository uses the BSD Zero Clause License (`0BSD`).
 - [ ] Re-run CI on the exact public revision linked from the issue.
 - [ ] Review [`inline-annotation-classes.md`](inline-annotation-classes.md) for any semantics you want to narrow before public discussion.
 - [ ] Decide whether parameter forwarding is part of the initial proposal or a follow-up. It is designed in the proposal but not yet executable in the prototype.
