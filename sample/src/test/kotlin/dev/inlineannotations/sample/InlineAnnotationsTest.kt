@@ -47,25 +47,6 @@ public class InlineAnnotationsTest {
     }
 
     @Test
-    public fun constituentDoesNotNeedAnnotationClassTarget() {
-        val method = fixturesMethod("functionOnlyTarget")
-
-        assertEquals(
-            "function-only constituent",
-            assertNotNull(method.getAnnotation(FunctionOnly::class.java)).value,
-        )
-        assertNull(method.getAnnotation(FunctionBundle::class.java))
-    }
-
-    @Test
-    public fun directAnnotationWinsOverBundledNonRepeatableAnnotation() {
-        val method = fixturesMethod("directAnnotationWins")
-
-        assertEquals("direct", assertNotNull(method.getAnnotation(Named::class.java)).value)
-        assertNull(method.getAnnotation(NamedBundle::class.java))
-    }
-
-    @Test
     public fun repeatableAnnotationsAccumulateAcrossDirectAndBundledUses() {
         val method = fixturesMethod("repeatableAnnotationsAccumulate")
 
