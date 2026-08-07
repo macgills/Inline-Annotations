@@ -27,10 +27,12 @@ The initial proposal is **fixed annotation substitution only**.
 
 ## Before filing the Language Design issue
 
-- [ ] Make this repository publicly readable so Kotlin maintainers can inspect the linked proof.
-- [ ] Re-run/verify CI on the exact public revision linked from the issue.
-- [ ] Read [`youtrack-language-design.md`](youtrack-language-design.md) once after publication to ensure all GitHub links resolve anonymously.
-- [ ] Replace any remaining private-repository assumptions with public wording if GitHub rendering exposes one.
+- [x] Repository is publicly readable; GitHub reports `macgills/Inline-Annotations` as public.
+- [x] CI is green on the public revision `5dee26477dc2b4c86a72d9abace70a37f3671aec` (CI run #57).
+- [ ] Open the repository, proposal, and YouTrack draft once in a logged-out/incognito browser after GitHub visibility/index propagation and confirm every link renders anonymously.
+- [x] No remaining private-repository wording was found in the repository after publication.
+
+The external crawler used during the publication review had not yet refreshed the newly-public repository, so the logged-out rendering check is intentionally left as a final manual verification rather than marked complete on inference alone.
 
 ## File the Language Design issue
 
