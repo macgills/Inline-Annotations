@@ -59,34 +59,11 @@ public annotation class Bundle
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class NestedBundle
 
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-public annotation class FunctionOnly(val value: String)
-
-@Suppress("WRONG_ANNOTATION_TARGET")
-@InlineAnnotations
-@FunctionOnly("function-only constituent")
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-public annotation class FunctionBundle
-
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-public annotation class Named(val value: String)
-
-@Suppress("WRONG_ANNOTATION_TARGET")
-@InlineAnnotations
-@Named("bundle")
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-public annotation class NamedBundle
-
 @Repeatable
-@Target(AnnotationTarget.FUNCTION)
+@Target(AnnotationTarget.ANNOTATION_CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Tag(val value: String)
 
-@Suppress("WRONG_ANNOTATION_TARGET")
 @InlineAnnotations
 @Tag("bundle")
 @Target(AnnotationTarget.FUNCTION)
@@ -106,13 +83,6 @@ public class Example @NestedBundle constructor(
 
     public class Generic<@NestedBundle T>
 }
-
-@FunctionBundle
-public fun functionOnlyTarget(): Unit = Unit
-
-@Named("direct")
-@NamedBundle
-public fun directAnnotationWins(): Unit = Unit
 
 @Tag("direct")
 @TagBundle
