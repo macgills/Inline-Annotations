@@ -23,6 +23,38 @@ fun operation() = Unit
 
 This is **annotation substitution**, not ordinary meta-annotation lookup. Constituent annotations are expanded in the frontend and behave as though they were written directly at the use site. The inline annotation use itself is not part of the emitted/effective annotation set.
 
+## Scope
+
+This proposal is deliberately limited to **fixed annotation recipes**.
+
+The arguments of constituent annotations are written where the inline annotation class is declared and are reused unchanged at every use site.
+
+It does **not** attempt to create a new annotation parameter API by amalgamating the parameters of its constituents. There is no parameter forwarding, aliasing, merging, or Spring-style `@AliasFor` behavior in the proposed feature.
+
+Supported shape:
+
+```kotlin
+@A("fixed")
+@B(7)
+inline annotation class Feature
+
+@Feature
+fun operation() = Unit
+```
+
+Deliberately out of scope:
+
+```kotlin
+// NOT PROPOSED
+@A(name = name)
+inline annotation class Feature(val name: String)
+
+@Feature("search")
+fun operation() = Unit
+```
+
+Parameterized annotation composition can be considered independently later without making it a prerequisite for useful fixed annotation substitution.
+
 ## Proof in one test
 
 The strongest small proof is deliberately cross-module.
@@ -68,7 +100,7 @@ fun compiledLibraryBundleExpandsInConsumerCompilation() {
 That establishes three important semantics at once:
 
 1. the recipe survives a separately compiled library boundary;
-2. the consumer receives the constituent annotations and their arguments; and
+2. the consumer receives the constituent annotations and their fixed arguments; and
 3. the bundle itself is absent from the emitted consumer declaration.
 
 See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/library/LibraryBundle.kt), [`CrossModuleFixture.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/CrossModuleFixture.kt), and [`CrossModuleInlineAnnotationsTest.kt`](sample/src/test/kotlin/dev/inlineannotations/sample/CrossModuleInlineAnnotationsTest.kt).
@@ -87,10 +119,10 @@ The current Kotlin KEEP process asks new language ideas to begin as a **Language
 Major frameworks repeatedly need annotation composition and have to implement it themselves:
 
 * **AndroidX Compose Preview** supports MultiPreview annotations by allowing `@Preview` on annotation classes and teaching Android Studio to treat their consumers as *indirectly annotated* with the contained previews.
-* **Spring Framework** implements composed annotations, `@AliasFor`, and the `MergedAnnotations` model to recursively discover, merge, override, and synthesize annotation semantics at runtime.
-* Compiler-semantic annotations expose the limitation of ordinary meta-annotations even more clearly. For example, Compose `@Composable` and `@ReadOnlyComposable` do not target `ANNOTATION_CLASS`, so they cannot be bundled using the ordinary annotation model at all.
+* **Spring Framework** implements a much richer composed-annotation model, including `@AliasFor` and `MergedAnnotations`. Spring is evidence of ecosystem demand, not the semantic scope of this proposal: parameter aliasing and merging remain outside this feature.
+* Compiler-semantic annotations expose the limitation of ordinary meta-annotations even more clearly. Compose `@Composable` and `@ReadOnlyComposable` do not target `ANNOTATION_CLASS`, so they cannot be bundled using the ordinary annotation model at all.
 
-The proposal makes the reusable composition itself a Kotlin semantic so compiler plugins, Analysis API, IDE tooling, backends, KSP/symbol consumers, and runtime frameworks do not each need to rediscover the same recipe.
+The proposal makes fixed reusable composition itself a Kotlin semantic so compiler plugins, Analysis API, IDE tooling, backends and symbol consumers do not each need to rediscover the same recipe.
 
 ## Prototype
 
@@ -111,13 +143,16 @@ Currently proven by executable tests on Kotlin 2.4.10:
 - cross-module expansion from a separately compiled library
 - compiler-plugin discovery and CI
 
-Still explicit proposal/prototype work:
+Known limitations / remaining design work:
 
-- parameter forwarding from an inline annotation into constituent annotation arguments
 - recipe/declaration annotation disambiguation for ambiguous multi-target meta-annotations
 - the complete annotation-target matrix
 - multiplatform metadata/backends
 - Java-source consumption semantics
+
+Explicit non-goal:
+
+- parameter forwarding or amalgamation of constituent annotation parameters into a new annotation parameter surface
 
 ## Run the proof
 
