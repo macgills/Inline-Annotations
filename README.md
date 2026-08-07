@@ -23,6 +23,56 @@ fun operation() = Unit
 
 This is **annotation substitution**, not ordinary meta-annotation lookup. Constituent annotations are expanded in the frontend and behave as though they were written directly at the use site. The inline annotation use itself is not part of the emitted/effective annotation set.
 
+## Proof in one test
+
+The strongest small proof is deliberately cross-module.
+
+`:bundle-library` declares a bundle with two independently retained annotations:
+
+```kotlin
+@InlineAnnotations
+@CrossModuleFirst("library")
+@CrossModuleSecond(42)
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class LibraryBundle
+```
+
+`:sample` depends on that already-compiled library and writes only the bundle:
+
+```kotlin
+@LibraryBundle
+fun crossModuleTarget() = Unit
+```
+
+The test reflects the compiled consumer:
+
+```kotlin
+@Test
+fun compiledLibraryBundleExpandsInConsumerCompilation() {
+    val method = Class.forName("dev.inlineannotations.sample.CrossModuleFixtureKt")
+        .getDeclaredMethod("crossModuleTarget")
+
+    assertEquals(
+        "library",
+        assertNotNull(method.getAnnotation(CrossModuleFirst::class.java)).value,
+    )
+    assertEquals(
+        42,
+        assertNotNull(method.getAnnotation(CrossModuleSecond::class.java)).number,
+    )
+    assertNull(method.getAnnotation(LibraryBundle::class.java))
+}
+```
+
+That establishes three important semantics at once:
+
+1. the recipe survives a separately compiled library boundary;
+2. the consumer receives the constituent annotations and their arguments; and
+3. the bundle itself is absent from the emitted consumer declaration.
+
+See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/library/LibraryBundle.kt), [`CrossModuleFixture.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/CrossModuleFixture.kt), and [`CrossModuleInlineAnnotationsTest.kt`](sample/src/test/kotlin/dev/inlineannotations/sample/CrossModuleInlineAnnotationsTest.kt).
+
 ## Proposal
 
 * [KEEP-shaped design proposal](proposal/inline-annotation-classes.md)
