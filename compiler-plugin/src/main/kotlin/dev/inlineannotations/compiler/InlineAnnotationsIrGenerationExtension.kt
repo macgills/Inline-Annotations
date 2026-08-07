@@ -2,10 +2,12 @@ package dev.inlineannotations.compiler
 
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrMutableAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
+import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.util.deepCopyWithoutPatchingParents
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
@@ -14,7 +16,12 @@ import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 
 internal class InlineAnnotationsIrGenerationExtension : IrGenerationExtension {
+    @Suppress("DEPRECATION")
     override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
+        pluginContext.messageCollector.report(
+            CompilerMessageSeverity.WARNING,
+            "inline-annotations: IR extension active for ${moduleFragment.name}",
+        )
         moduleFragment.transformChildrenVoid(InlineAnnotationsTransformer(pluginContext))
     }
 }
@@ -35,6 +42,8 @@ private class InlineAnnotationsTransformer(
     private fun expand(annotation: IrAnnotation): List<IrAnnotation> =
         expand(annotation, linkedSetOf())
 
+    @OptIn(UnsafeDuringIrConstructionAPI::class)
+    @Suppress("DEPRECATION")
     private fun expand(
         annotation: IrAnnotation,
         expansionStack: MutableSet<ClassId>,
