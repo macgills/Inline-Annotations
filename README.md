@@ -76,3 +76,7 @@ gradle --no-daemon clean test
 ```
 
 CI runs the same command on every push and pull request.
+
+## License
+
+This repository is licensed under the **BSD Zero Clause License (`0BSD`)**. You may use, copy, modify, and distribute the code for any purpose, with no attribution requirement. See [LICENSE](LICENSE).
