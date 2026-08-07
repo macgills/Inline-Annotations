@@ -15,5 +15,6 @@ dependencyResolutionManagement {
 rootProject.name = "inline-annotations"
 
 include(":annotations")
+include(":bundle-library")
 include(":compiler-plugin")
 include(":sample")

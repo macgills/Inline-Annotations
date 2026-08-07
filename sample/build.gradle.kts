@@ -11,6 +11,7 @@ kotlin {
 
 dependencies {
     implementation(project(":annotations"))
+    implementation(project(":bundle-library"))
     testImplementation(kotlin("test-junit"))
     testImplementation("junit:junit:4.13.2")
 }
