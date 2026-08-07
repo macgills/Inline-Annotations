@@ -1,6 +1,6 @@
 # Inline annotation classes
 
-Executable language-design evidence for compile-time annotation composition in Kotlin.
+Executable language-design evidence for fixed compile-time annotation composition in Kotlin.
 
 The proposed syntax is:
 
@@ -21,7 +21,7 @@ with effective semantics equivalent to:
 fun operation() = Unit
 ```
 
-This is **annotation substitution**, not ordinary meta-annotation lookup. Constituent annotations are expanded in the frontend and behave as though they were written directly at the use site. The inline annotation use itself is not part of the emitted/effective annotation set.
+This is **annotation substitution**, not ordinary meta-annotation lookup. Constituent annotations are expanded in the frontend and then follow Kotlin's ordinary annotation rules as though they had been written directly at the use site. The inline annotation use itself is not part of the effective/emitted annotation set.
 
 ## Scope
 
@@ -53,15 +53,24 @@ inline annotation class Feature(val name: String)
 fun operation() = Unit
 ```
 
-Parameterized annotation composition can be considered independently later without making it a prerequisite for useful fixed annotation substitution.
+Parameterized annotation composition can be considered independently later.
 
 ## Proof in one test
 
-The strongest small proof is deliberately cross-module.
+The strongest small proof is deliberately cross-module and crosses today's annotation-target boundary.
 
-`:bundle-library` declares a bundle with two independently retained annotations:
+`:bundle-library` declares a bundle containing one annotation that is legal **only on functions**:
 
 ```kotlin
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class CrossModuleFirst(val value: String)
+
+@Target(AnnotationTarget.ANNOTATION_CLASS, AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class CrossModuleSecond(val number: Int)
+
+@Suppress("WRONG_ANNOTATION_TARGET") // prototype-only concession to today's compiler
 @InlineAnnotations
 @CrossModuleFirst("library")
 @CrossModuleSecond(42)
@@ -70,7 +79,7 @@ The strongest small proof is deliberately cross-module.
 annotation class LibraryBundle
 ```
 
-`:sample` depends on that already-compiled library and writes only the bundle:
+`:sample` depends on that separately compiled library and writes only the bundle:
 
 ```kotlin
 @LibraryBundle
@@ -97,11 +106,12 @@ fun compiledLibraryBundleExpandsInConsumerCompilation() {
 }
 ```
 
-That establishes three important semantics at once:
+That establishes four important properties at once:
 
 1. the recipe survives a separately compiled library boundary;
-2. the consumer receives the constituent annotations and their fixed arguments; and
-3. the bundle itself is absent from the emitted consumer declaration.
+2. a constituent does not need `AnnotationTarget.ANNOTATION_CLASS` merely to participate in the recipe;
+3. the consumer receives the constituent annotations and their fixed arguments; and
+4. the bundle itself is absent from the emitted consumer declaration.
 
 See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/library/LibraryBundle.kt), [`CrossModuleFixture.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/CrossModuleFixture.kt), and [`CrossModuleInlineAnnotationsTest.kt`](sample/src/test/kotlin/dev/inlineannotations/sample/CrossModuleInlineAnnotationsTest.kt).
 
@@ -112,21 +122,21 @@ See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/li
 * [Submission checklist](proposal/submission-checklist.md)
 * [Why the prototype cannot make `inline annotation class` legal](docs/language-boundary.md)
 
-The current Kotlin KEEP process asks new language ideas to begin as a **Language Design YouTrack issue with concrete real-world use cases**, rather than as an unsolicited PR adding a new KEEP. The documents above are structured so the YouTrack submission can lead into a formal KEEP if the language team accepts the direction.
+The current Kotlin KEEP process asks new language ideas to begin as a **Language Design YouTrack issue with concrete real-world use cases**, rather than as an unsolicited PR adding a new KEEP.
 
 ## Why this exists
 
 Major frameworks repeatedly need annotation composition and have to implement it themselves:
 
-* **AndroidX Compose Preview** supports MultiPreview annotations by allowing `@Preview` on annotation classes and teaching Android Studio to treat their consumers as *indirectly annotated* with the contained previews.
+* **AndroidX Compose Preview** supports MultiPreview annotations by allowing `@Preview` on annotation classes and teaching Android Studio to interpret their consumers as indirectly carrying the contained previews.
 * **Spring Framework** implements a much richer composed-annotation model, including `@AliasFor` and `MergedAnnotations`. Spring is evidence of ecosystem demand, not the semantic scope of this proposal: parameter aliasing and merging remain outside this feature.
 * Compiler-semantic annotations expose the limitation of ordinary meta-annotations even more clearly. Compose `@Composable` and `@ReadOnlyComposable` do not target `ANNOTATION_CLASS`, so they cannot be bundled using the ordinary annotation model at all.
 
-The proposal makes fixed reusable composition itself a Kotlin semantic so compiler plugins, Analysis API, IDE tooling, backends and symbol consumers do not each need to rediscover the same recipe.
+The proposal makes fixed reusable composition itself a Kotlin semantic so compiler plugins, Analysis API, IDE tooling, backends, and symbol consumers do not each need to rediscover the same recipe.
 
 ## Prototype
 
-An ordinary compiler plugin cannot change Kotlin's built-in modifier applicability rules, so the executable proof uses `@InlineAnnotations` as a temporary bootstrap marker. The intended `inline annotation class` form is retained in a language-boundary fixture and intentionally remains rejected by stock Kotlin.
+An ordinary compiler plugin cannot change Kotlin's built-in modifier-applicability or annotation-target rules, so the executable proof uses `@InlineAnnotations` as a temporary bootstrap marker and one intentionally suppressed `WRONG_ANNOTATION_TARGET` diagnostic. The desired `inline annotation class` form is retained in a language-boundary fixture and intentionally remains rejected by stock Kotlin.
 
 The semantic prototype is implemented in **K2 FIR**, not as an IR-only trick.
 
@@ -137,22 +147,26 @@ Currently proven by executable tests on Kotlin 2.4.10:
 - recursive/nested bundles
 - bundle removal from emitted declarations
 - class, constructor, function, field, getter, value-parameter, and type-parameter targets
-- constituents that do **not** target `ANNOTATION_CLASS`
-- direct non-repeatable annotations overriding bundled values
-- repeatable annotations accumulating across direct and bundled uses
+- a constituent that does **not** target `ANNOTATION_CLASS`
+- repeatable annotations accumulating after expansion
 - cross-module expansion from a separately compiled library
 - compiler-plugin discovery and CI
 
 Known limitations / remaining design work:
 
+- the prototype uses a suppression to cross today's `ANNOTATION_CLASS` target check; the language feature must make recipe position legal directly
+- cycle handling in the prototype is an internal assertion rather than a user-facing compiler diagnostic
 - recipe/declaration annotation disambiguation for ambiguous multi-target meta-annotations
-- the complete annotation-target matrix
-- multiplatform metadata/backends
+- the complete annotation-target/use-site-target matrix
+- dedicated recipe metadata independent of constituent retention, especially for `SOURCE` retention and KLIB/multiplatform
 - Java-source consumption semantics
+- semantic API representation of direct versus expanded annotation origin
 
 Explicit non-goal:
 
 - parameter forwarding or amalgamation of constituent annotation parameters into a new annotation parameter surface
+
+After expansion, Kotlin's existing duplicate/repeatable rules should apply. The feature does not invent a separate bundle-precedence model.
 
 ## Run the proof
 
