@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrMutableAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
+import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.util.deepCopyWithoutPatchingParents
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
@@ -16,6 +17,7 @@ import org.jetbrains.kotlin.name.FqName
 
 internal class InlineAnnotationsIrGenerationExtension : IrGenerationExtension {
     override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
+        System.err.println("inline-annotations: lowering ${moduleFragment.name}")
         moduleFragment.transformChildrenVoid(InlineAnnotationsTransformer())
     }
 }
@@ -34,14 +36,21 @@ private class InlineAnnotationsTransformer : IrElementTransformerVoid() {
     private fun expand(annotation: IrAnnotation): List<IrAnnotation> =
         expand(annotation, linkedSetOf())
 
+    @OptIn(UnsafeDuringIrConstructionAPI::class)
     private fun expand(
         annotation: IrAnnotation,
         expansionStack: MutableSet<ClassId>,
     ): List<IrAnnotation> {
         val classId = annotation.classId ?: return listOf(annotation)
         val annotationClass = annotation.symbol.owner.parent as? IrClass ?: return listOf(annotation)
+        val isBundle = annotationClass.hasAnnotation(INLINE_ANNOTATIONS_FQ_NAME)
 
-        if (!annotationClass.hasAnnotation(INLINE_ANNOTATIONS_FQ_NAME)) {
+        if (classId.asSingleFqName().asString().startsWith("dev.inlineannotations")) {
+            val meta = annotationClass.annotations.mapNotNull { it.classId?.asSingleFqName()?.asString() }
+            System.err.println("inline-annotations: ${classId.asSingleFqName()} bundle=$isBundle meta=$meta")
+        }
+
+        if (!isBundle) {
             return listOf(annotation)
         }
 
