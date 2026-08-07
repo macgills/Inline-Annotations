@@ -27,6 +27,7 @@ This is **annotation substitution**, not ordinary meta-annotation lookup. Consti
 
 * [KEEP-shaped design proposal](proposal/inline-annotation-classes.md)
 * [Language Design YouTrack submission draft](proposal/youtrack-language-design.md)
+* [Submission checklist](proposal/submission-checklist.md)
 * [Why the prototype cannot make `inline annotation class` legal](docs/language-boundary.md)
 
 The current Kotlin KEEP process asks new language ideas to begin as a **Language Design YouTrack issue with concrete real-world use cases**, rather than as an unsolicited PR adding a new KEEP. The documents above are structured so the YouTrack submission can lead into a formal KEEP if the language team accepts the direction.
@@ -63,6 +64,7 @@ Currently proven by executable tests on Kotlin 2.4.10:
 Still explicit proposal/prototype work:
 
 - parameter forwarding from an inline annotation into constituent annotation arguments
+- recipe/declaration annotation disambiguation for ambiguous multi-target meta-annotations
 - the complete annotation-target matrix
 - multiplatform metadata/backends
 - Java-source consumption semantics
