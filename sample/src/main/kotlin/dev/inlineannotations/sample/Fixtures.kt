@@ -1,18 +1,5 @@
 package dev.inlineannotations.sample
 
-import dev.inlineannotations.InlineAnnotations
-
-private val supportedTargets = arrayOf(
-    AnnotationTarget.ANNOTATION_CLASS,
-    AnnotationTarget.CLASS,
-    AnnotationTarget.CONSTRUCTOR,
-    AnnotationTarget.FUNCTION,
-    AnnotationTarget.FIELD,
-    AnnotationTarget.PROPERTY_GETTER,
-    AnnotationTarget.VALUE_PARAMETER,
-    AnnotationTarget.TYPE_PARAMETER,
-)
-
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
     AnnotationTarget.CLASS,
@@ -39,7 +26,6 @@ public annotation class First(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Second(val number: Int)
 
-@InlineAnnotations
 @First("expanded")
 @Second(7)
 @Target(
@@ -53,9 +39,8 @@ public annotation class Second(val number: Int)
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class Bundle
+public inline annotation class Bundle
 
-@InlineAnnotations
 @Bundle
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
@@ -68,7 +53,7 @@ public annotation class Bundle
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class NestedBundle
+public inline annotation class NestedBundle
 
 @NestedBundle
 public class Example @NestedBundle constructor(
