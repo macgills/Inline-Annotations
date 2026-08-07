@@ -50,8 +50,17 @@ private class InlineAnnotationsTransformer(
     ): List<IrAnnotation> {
         val classId = annotation.classId ?: return listOf(annotation)
         val annotationClass = pluginContext.referenceClass(classId)?.owner ?: return listOf(annotation)
+        val isBundle = annotationClass.hasAnnotation(INLINE_ANNOTATIONS_FQ_NAME)
 
-        if (!annotationClass.hasAnnotation(INLINE_ANNOTATIONS_FQ_NAME)) {
+        if (classId.asSingleFqName().asString().startsWith("dev.inlineannotations.sample")) {
+            val meta = annotationClass.annotations.mapNotNull { it.classId?.asSingleFqName()?.asString() }
+            pluginContext.messageCollector.report(
+                CompilerMessageSeverity.WARNING,
+                "inline-annotations: ${classId.asSingleFqName()} bundle=$isBundle meta=$meta",
+            )
+        }
+
+        if (!isBundle) {
             return listOf(annotation)
         }
 
