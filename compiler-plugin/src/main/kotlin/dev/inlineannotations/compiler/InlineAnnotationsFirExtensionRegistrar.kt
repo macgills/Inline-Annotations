@@ -24,15 +24,22 @@ internal class InlineAnnotationsFirExtensionRegistrar : FirExtensionRegistrar() 
 private class InlineAnnotationsFirStatusTransformer(
     session: FirSession,
 ) : FirStatusTransformerExtension(session) {
+    private val inlineAnnotationClassIds = mutableSetOf<ClassId>()
+
     override fun needTransformStatus(declaration: FirDeclaration): Boolean {
+        val isInlineAnnotationClass = declaration.isPrototypeInlineAnnotationClass()
+        if (isInlineAnnotationClass) {
+            inlineAnnotationClassIds += (declaration as FirRegularClass).symbol.classId
+        }
+
         declaration.replaceAnnotations(expand(declaration.annotations, linkedSetOf()))
-        return declaration.isPrototypeInlineAnnotationClass()
+        return isInlineAnnotationClass
     }
 
     override fun transformStatus(
         status: FirDeclarationStatus,
         declaration: FirDeclaration,
-    ): FirDeclarationStatus = if (declaration.isPrototypeInlineAnnotationClass()) {
+    ): FirDeclarationStatus = if (declaration is FirRegularClass && declaration.symbol.classId in inlineAnnotationClassIds) {
         status.transform {
             isInline = false
             isValue = false
@@ -72,7 +79,9 @@ private class InlineAnnotationsFirStatusTransformer(
     }
 
     private fun FirRegularClass.isInlineAnnotationBundle(): Boolean =
-        isPrototypeInlineAnnotationClass() || hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)
+        symbol.classId in inlineAnnotationClassIds ||
+            isPrototypeInlineAnnotationClass() ||
+            hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)
 
     private fun FirDeclaration.isPrototypeInlineAnnotationClass(): Boolean =
         this is FirRegularClass &&
