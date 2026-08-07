@@ -46,6 +46,18 @@ public class InlineAnnotationsTest {
         Example.Generic::class.java.typeParameters.single().assertExpanded()
     }
 
+    @Test
+    public fun constituentDoesNotNeedAnnotationClassTarget() {
+        val method = Class.forName("dev.inlineannotations.sample.FixturesKt")
+            .getDeclaredMethod("functionOnlyTarget")
+
+        assertEquals(
+            "function-only constituent",
+            assertNotNull(method.getAnnotation(FunctionOnly::class.java)).value,
+        )
+        assertNull(method.getAnnotation(FunctionBundle::class.java))
+    }
+
     private fun AnnotatedElement.assertExpanded() {
         val first = assertNotNull(getAnnotation(First::class.java), "did not receive @First")
         val second = assertNotNull(getAnnotation(Second::class.java), "did not receive @Second")

@@ -1,5 +1,7 @@
 package dev.inlineannotations.sample
 
+import dev.inlineannotations.InlineAnnotations
+
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
     AnnotationTarget.CLASS,
@@ -26,6 +28,7 @@ public annotation class First(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Second(val number: Int)
 
+@InlineAnnotations
 @First("expanded")
 @Second(7)
 @Target(
@@ -39,8 +42,9 @@ public annotation class Second(val number: Int)
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public inline annotation class Bundle
+public annotation class Bundle
 
+@InlineAnnotations
 @Bundle
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
@@ -53,7 +57,17 @@ public inline annotation class Bundle
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public inline annotation class NestedBundle
+public annotation class NestedBundle
+
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class FunctionOnly(val value: String)
+
+@InlineAnnotations
+@FunctionOnly("function-only constituent")
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class FunctionBundle
 
 @NestedBundle
 public class Example @NestedBundle constructor(
@@ -68,3 +82,6 @@ public class Example @NestedBundle constructor(
 
     public class Generic<@NestedBundle T>
 }
+
+@FunctionBundle
+public fun functionOnlyTarget(): Unit = Unit

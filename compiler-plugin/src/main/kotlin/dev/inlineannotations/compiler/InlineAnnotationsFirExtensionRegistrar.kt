@@ -36,10 +36,15 @@ internal class InlineAnnotationsFirExtensionRegistrar : FirExtensionRegistrar() 
 private class InlineAnnotationsFirState(
     session: FirSession,
 ) : FirExtensionSessionComponent(session) {
-    val inlineAnnotationClassIds: MutableSet<ClassId> = mutableSetOf()
+    val bundleClassIds: MutableSet<ClassId> = mutableSetOf()
+    val recipes: MutableMap<ClassId, List<FirAnnotation>> = mutableMapOf()
 }
 
 private val FirSession.inlineAnnotationsState: InlineAnnotationsFirState by FirSession.sessionComponentAccessor()
+
+private data class BundleDeclaration(
+    val usesInlineModifier: Boolean,
+)
 
 private class InlineAnnotationsFirStatusTransformer(
     session: FirSession,
@@ -47,15 +52,21 @@ private class InlineAnnotationsFirStatusTransformer(
     private val expander = InlineAnnotationsFirExpander(session)
 
     override fun needTransformStatus(declaration: FirDeclaration): Boolean {
-        val isInlineAnnotationClass = expander.registerInlineAnnotationClass(declaration)
-        declaration.replaceAnnotations(expander.expand(declaration.annotations))
-        return isInlineAnnotationClass
+        val bundle = expander.prepareBundleDeclaration(declaration)
+        if (bundle == null) {
+            declaration.replaceAnnotations(expander.expand(declaration.annotations))
+        }
+        return bundle?.usesInlineModifier == true
     }
 
     override fun transformStatus(
         status: FirDeclarationStatus,
         declaration: FirDeclaration,
-    ): FirDeclarationStatus = if (declaration is FirRegularClass && declaration.symbol.classId in session.inlineAnnotationsState.inlineAnnotationClassIds) {
+    ): FirDeclarationStatus = if (
+        declaration is FirRegularClass &&
+        declaration.symbol.classId in session.inlineAnnotationsState.bundleClassIds &&
+        status.isInline
+    ) {
         status.transform {
             isInline = false
             isValue = false
@@ -98,11 +109,28 @@ private class InlineAnnotationsValueParameterChecker(
 private class InlineAnnotationsFirExpander(
     private val session: FirSession,
 ) {
-    fun registerInlineAnnotationClass(declaration: FirDeclaration): Boolean {
-        if (!declaration.isPrototypeInlineAnnotationClass()) return false
+    fun prepareBundleDeclaration(declaration: FirDeclaration): BundleDeclaration? {
+        if (declaration !is FirRegularClass || declaration.classKind != ClassKind.ANNOTATION_CLASS) {
+            return null
+        }
 
-        session.inlineAnnotationsState.inlineAnnotationClassIds += (declaration as FirRegularClass).symbol.classId
-        return true
+        val usesInlineModifier = declaration.status.isInline
+        val usesPrototypeMarker = declaration.hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)
+        if (!usesInlineModifier && !usesPrototypeMarker) {
+            return null
+        }
+
+        val classId = declaration.symbol.classId
+        val state = session.inlineAnnotationsState
+        state.bundleClassIds += classId
+        state.recipes[classId] = declaration.annotations.filterNot(::isInfrastructureAnnotation)
+
+        // Constituents are a recipe, not annotations applied to the annotation class itself.
+        // Removing them here is what lets a FUNCTION-only annotation participate in a
+        // FUNCTION-only bundle without requiring ANNOTATION_CLASS in its own @Target.
+        declaration.replaceAnnotations(declaration.annotations.filter(::isInfrastructureAnnotation))
+
+        return BundleDeclaration(usesInlineModifier)
     }
 
     fun expand(annotations: List<FirAnnotation>): List<FirAnnotation> =
@@ -113,10 +141,15 @@ private class InlineAnnotationsFirExpander(
         expansionStack: MutableSet<ClassId>,
     ): List<FirAnnotation> = buildList {
         for (annotation in annotations) {
-            val annotationClass = annotation.toAnnotationClass(session)
             val classId = annotation.toAnnotationClassId(session)
+            val annotationClass = annotation.toAnnotationClass(session)
+            val recipe = if (classId != null && annotationClass != null) {
+                recipeFor(classId, annotationClass)
+            } else {
+                null
+            }
 
-            if (annotationClass == null || classId == null || !annotationClass.isInlineAnnotationBundle()) {
+            if (classId == null || recipe == null) {
                 add(annotation)
                 continue
             }
@@ -126,31 +159,32 @@ private class InlineAnnotationsFirExpander(
             }
 
             try {
-                addAll(
-                    expand(
-                        annotationClass.annotations.filterNot(::isInfrastructureAnnotation),
-                        expansionStack,
-                    ),
-                )
+                addAll(expand(recipe, expansionStack))
             } finally {
                 expansionStack.remove(classId)
             }
         }
     }
 
-    private fun FirRegularClass.isInlineAnnotationBundle(): Boolean =
-        symbol.classId in session.inlineAnnotationsState.inlineAnnotationClassIds ||
-            isPrototypeInlineAnnotationClass() ||
-            hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)
+    private fun recipeFor(
+        classId: ClassId,
+        annotationClass: FirRegularClass,
+    ): List<FirAnnotation>? {
+        session.inlineAnnotationsState.recipes[classId]?.let { return it }
 
-    private fun FirDeclaration.isPrototypeInlineAnnotationClass(): Boolean =
-        this is FirRegularClass &&
-            classKind == ClassKind.ANNOTATION_CLASS &&
-            status.isInline
+        // Prototype metadata fallback: a bundle compiled without this plugin retains
+        // @InlineAnnotations and its recipe annotations in Kotlin/JVM metadata.
+        if (annotationClass.hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)) {
+            return annotationClass.annotations.filterNot(::isInfrastructureAnnotation)
+        }
+
+        return null
+    }
 
     private fun isInfrastructureAnnotation(annotation: FirAnnotation): Boolean {
         val classId = annotation.toAnnotationClassId(session) ?: return false
-        return classId == INLINE_ANNOTATIONS_CLASS_ID || classId.asSingleFqName() in KOTLIN_ANNOTATION_META_FQ_NAMES
+        return classId == INLINE_ANNOTATIONS_CLASS_ID ||
+            classId.asSingleFqName() in KOTLIN_ANNOTATION_META_FQ_NAMES
     }
 }
 
