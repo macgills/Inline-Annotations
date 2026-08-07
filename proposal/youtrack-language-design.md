@@ -165,13 +165,22 @@ The strongest test combines the last two claims. `:bundle-library` declares `@Cr
 ## Prototype limitations that are not being presented as solved
 
 * The target-checking concession is implemented with `@Suppress("WRONG_ANNOTATION_TARGET")`; a real language feature must make recipe position legal directly.
-* Cross-module JVM expansion is proven only where the recipe annotations remain available in compiled symbol metadata. A real implementation needs dedicated recipe metadata independent of constituent retention, including `SOURCE`, and corresponding KLIB/common metadata.
+* The prototype encodes a cross-module recipe using ordinary annotations on the bundle declaration because those are what a compiler plugin can recover from a dependency. **That is prototype scaffolding, not the desired artifact semantics.** Recipe constituents should be stored in dedicated Kotlin compile-time metadata, not exposed to Java/reflection as though they semantically annotated the inline annotation declaration itself.
+* Cross-module JVM expansion is therefore proven only where the recipe annotations remain available in compiled symbol metadata. A real implementation needs dedicated recipe metadata independent of constituent retention, including `SOURCE`, and corresponding KLIB/common metadata.
 * The prototype detects cycles with an internal assertion, not a polished compiler diagnostic.
 * The complete target/use-site-target matrix is not tested.
 * Java-source use of an inline annotation class cannot inherit Kotlin compiler semantics automatically and needs an interoperability rule.
-* The final language design must distinguish recipe annotations from annotations intended to describe the inline annotation declaration itself.
+* The final language design must distinguish recipe annotations from annotations intended to describe the inline annotation declaration itself. The meaning, if any, of declaration controls such as `@Retention` on an annotation whose uses are themselves erased also needs to be specified.
 
 Parameter forwarding is **not** a prototype limitation or future requirement of this proposal; it is explicitly out of scope.
+
+## Related Kotlin design history
+
+KT-14652 (`constexpr` / compile-time functions) contains an older suggestion that compile-time annotation factories could return annotations, including multiple annotations at once. That is related motivation, but it requires the much larger `constexpr` facility and naturally leads toward parameterized annotation factories.
+
+This proposal is intentionally smaller: it asks only for a fixed annotation recipe attached to an annotation declaration and frontend substitution of that recipe.
+
+Reference: https://youtrack.jetbrains.com/issue/KT-14652
 
 ## Why a language feature rather than a library/compiler-plugin convention?
 
