@@ -70,6 +70,29 @@ public annotation class FunctionOnly(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class FunctionBundle
 
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class Named(val value: String)
+
+@Suppress("WRONG_ANNOTATION_TARGET")
+@InlineAnnotations
+@Named("bundle")
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class NamedBundle
+
+@Repeatable
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class Tag(val value: String)
+
+@Suppress("WRONG_ANNOTATION_TARGET")
+@InlineAnnotations
+@Tag("bundle")
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class TagBundle
+
 @NestedBundle
 public class Example @NestedBundle constructor(
     @NestedBundle public val input: String,
@@ -86,3 +109,11 @@ public class Example @NestedBundle constructor(
 
 @FunctionBundle
 public fun functionOnlyTarget(): Unit = Unit
+
+@Named("direct")
+@NamedBundle
+public fun directAnnotationWins(): Unit = Unit
+
+@Tag("direct")
+@TagBundle
+public fun repeatableAnnotationsAccumulate(): Unit = Unit

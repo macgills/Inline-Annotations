@@ -108,19 +108,45 @@ private class InlineAnnotationsFirExpander(
         return true
     }
 
-    fun expand(annotations: List<FirAnnotation>): List<FirAnnotation> =
-        expand(annotations, linkedSetOf())
+    fun expand(annotations: List<FirAnnotation>): List<FirAnnotation> {
+        val directAnnotationClassIds = annotations.mapNotNull { annotation ->
+            val annotationClass = annotation.toAnnotationClass(session) ?: return@mapNotNull null
+            val classId = annotation.toAnnotationClassId(session) ?: return@mapNotNull null
+            classId.takeUnless { annotationClass.isInlineAnnotationBundle() }
+        }.toSet()
+
+        return expand(
+            annotations = annotations,
+            expansionStack = linkedSetOf(),
+            directAnnotationClassIds = directAnnotationClassIds,
+            fromBundle = false,
+        )
+    }
 
     private fun expand(
         annotations: List<FirAnnotation>,
         expansionStack: MutableSet<ClassId>,
+        directAnnotationClassIds: Set<ClassId>,
+        fromBundle: Boolean,
     ): List<FirAnnotation> = buildList {
         for (annotation in annotations) {
             val annotationClass = annotation.toAnnotationClass(session)
             val classId = annotation.toAnnotationClassId(session)
 
-            if (annotationClass == null || classId == null || !annotationClass.isInlineAnnotationBundle()) {
+            if (annotationClass == null || classId == null) {
                 add(annotation)
+                continue
+            }
+
+            if (!annotationClass.isInlineAnnotationBundle()) {
+                val shadowedByDirectAnnotation =
+                    fromBundle &&
+                        classId in directAnnotationClassIds &&
+                        !annotationClass.isRepeatableAnnotation()
+
+                if (!shadowedByDirectAnnotation) {
+                    add(annotation)
+                }
                 continue
             }
 
@@ -131,8 +157,10 @@ private class InlineAnnotationsFirExpander(
             try {
                 addAll(
                     expand(
-                        annotationClass.annotations.filterNot(::isInfrastructureAnnotation),
-                        expansionStack,
+                        annotations = annotationClass.annotations.filterNot(::isInfrastructureAnnotation),
+                        expansionStack = expansionStack,
+                        directAnnotationClassIds = directAnnotationClassIds,
+                        fromBundle = true,
                     ),
                 )
             } finally {
@@ -145,6 +173,9 @@ private class InlineAnnotationsFirExpander(
         symbol.classId in session.inlineAnnotationsState.inlineAnnotationClassIds ||
             isPrototypeInlineAnnotationClass() ||
             hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)
+
+    private fun FirRegularClass.isRepeatableAnnotation(): Boolean =
+        hasAnnotation(REPEATABLE_ANNOTATION_CLASS_ID, session)
 
     private fun FirDeclaration.isPrototypeInlineAnnotationClass(): Boolean =
         this is FirRegularClass &&
@@ -161,6 +192,7 @@ private class InlineAnnotationsFirExpander(
 }
 
 private val INLINE_ANNOTATIONS_CLASS_ID = ClassId.topLevel(FqName("dev.inlineannotations.InlineAnnotations"))
+private val REPEATABLE_ANNOTATION_CLASS_ID = ClassId.topLevel(FqName("kotlin.annotation.Repeatable"))
 private val SUPPRESS_FQ_NAME = FqName("kotlin.Suppress")
 
 private val KOTLIN_ANNOTATION_META_FQ_NAMES = setOf(

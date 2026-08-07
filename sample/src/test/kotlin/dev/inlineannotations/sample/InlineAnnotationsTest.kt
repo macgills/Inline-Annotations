@@ -48,8 +48,7 @@ public class InlineAnnotationsTest {
 
     @Test
     public fun constituentDoesNotNeedAnnotationClassTarget() {
-        val method = Class.forName("dev.inlineannotations.sample.FixturesKt")
-            .getDeclaredMethod("functionOnlyTarget")
+        val method = fixturesMethod("functionOnlyTarget")
 
         assertEquals(
             "function-only constituent",
@@ -57,6 +56,28 @@ public class InlineAnnotationsTest {
         )
         assertNull(method.getAnnotation(FunctionBundle::class.java))
     }
+
+    @Test
+    public fun directAnnotationWinsOverBundledNonRepeatableAnnotation() {
+        val method = fixturesMethod("directAnnotationWins")
+
+        assertEquals("direct", assertNotNull(method.getAnnotation(Named::class.java)).value)
+        assertNull(method.getAnnotation(NamedBundle::class.java))
+    }
+
+    @Test
+    public fun repeatableAnnotationsAccumulateAcrossDirectAndBundledUses() {
+        val method = fixturesMethod("repeatableAnnotationsAccumulate")
+
+        assertEquals(
+            listOf("direct", "bundle"),
+            method.getAnnotationsByType(Tag::class.java).map(Tag::value),
+        )
+        assertNull(method.getAnnotation(TagBundle::class.java))
+    }
+
+    private fun fixturesMethod(name: String) =
+        Class.forName("dev.inlineannotations.sample.FixturesKt").getDeclaredMethod(name)
 
     private fun AnnotatedElement.assertExpanded() {
         val first = assertNotNull(getAnnotation(First::class.java), "did not receive @First")
