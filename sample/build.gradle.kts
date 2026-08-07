@@ -27,6 +27,5 @@ tasks.withType<KotlinJvmCompile>().configureEach {
         check(pluginFiles.any { it.name == "inline-annotations-compiler-plugin.jar" }) {
             "Inline annotations compiler plugin missing from $name pluginClasspath: $pluginFiles"
         }
-        logger.lifecycle("inline-annotations: $name pluginClasspath=$pluginFiles")
     }
 }
