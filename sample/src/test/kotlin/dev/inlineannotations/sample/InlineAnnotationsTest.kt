@@ -8,26 +8,51 @@ import kotlin.test.assertNull
 
 public class InlineAnnotationsTest {
     @Test
-    public fun expandsBundleAcrossJvmDeclarationTargets() {
-        Example::class.java.assertExpanded("class")
-        Example::class.java.declaredConstructors.single().assertExpanded("constructor")
-        Example::class.java.getDeclaredField("value").assertExpanded("field")
-        Example::class.java.getDeclaredMethod("getValue").assertExpanded("getter")
-
-        val function = Example::class.java.getDeclaredMethod("run", String::class.java)
-        function.assertExpanded("function")
-        function.parameters.single().assertExpanded("value parameter")
-
-        Example.Generic::class.java.typeParameters.single().assertExpanded("type parameter")
+    public fun classTargetExpands() {
+        Example::class.java.assertExpanded()
     }
 
-    private fun AnnotatedElement.assertExpanded(label: String) {
-        val first = assertNotNull(getAnnotation(First::class.java), "$label did not receive @First")
-        val second = assertNotNull(getAnnotation(Second::class.java), "$label did not receive @Second")
+    @Test
+    public fun constructorTargetExpands() {
+        Example::class.java.declaredConstructors.single().assertExpanded()
+    }
 
-        assertEquals("expanded", first.value, "$label received the wrong @First argument")
-        assertEquals(7, second.number, "$label received the wrong @Second argument")
-        assertNull(getAnnotation(Bundle::class.java), "$label retained @Bundle")
-        assertNull(getAnnotation(NestedBundle::class.java), "$label retained @NestedBundle")
+    @Test
+    public fun fieldTargetExpands() {
+        Example::class.java.getDeclaredField("value").assertExpanded()
+    }
+
+    @Test
+    public fun getterTargetExpands() {
+        Example::class.java.getDeclaredMethod("getValue").assertExpanded()
+    }
+
+    @Test
+    public fun functionTargetExpands() {
+        Example::class.java.getDeclaredMethod("run", String::class.java).assertExpanded()
+    }
+
+    @Test
+    public fun valueParameterTargetExpands() {
+        Example::class.java
+            .getDeclaredMethod("run", String::class.java)
+            .parameters
+            .single()
+            .assertExpanded()
+    }
+
+    @Test
+    public fun typeParameterTargetExpands() {
+        Example.Generic::class.java.typeParameters.single().assertExpanded()
+    }
+
+    private fun AnnotatedElement.assertExpanded() {
+        val first = assertNotNull(getAnnotation(First::class.java), "did not receive @First")
+        val second = assertNotNull(getAnnotation(Second::class.java), "did not receive @Second")
+
+        assertEquals("expanded", first.value, "received the wrong @First argument")
+        assertEquals(7, second.number, "received the wrong @Second argument")
+        assertNull(getAnnotation(Bundle::class.java), "retained @Bundle")
+        assertNull(getAnnotation(NestedBundle::class.java), "retained @NestedBundle")
     }
 }
