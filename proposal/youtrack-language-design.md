@@ -2,7 +2,7 @@
 
 ## Suggested title
 
-Language support for inline annotation classes (compile-time annotation composition)
+Language support for inline annotation classes (fixed compile-time annotation composition)
 
 ## Subsystem
 
@@ -31,7 +31,7 @@ with the effective semantics of:
 fun operation() = Unit
 ```
 
-The important part is that this is **frontend annotation substitution**, not runtime meta-annotation lookup. The bundle annotation disappears from the effective annotation set and its constituent annotations are visible to target checking, compiler plugins, Analysis API/IDE tooling, backends, and runtime reflection according to each constituent's normal retention.
+This is **frontend annotation substitution**, not runtime meta-annotation lookup. The bundle annotation disappears from the effective annotation set, and the expanded constituents are then handled by Kotlin exactly as directly written annotations would be.
 
 ## Deliberately narrow scope
 
@@ -45,7 +45,7 @@ It does **not** propose:
 * Spring-style merged-annotation or attribute-override semantics;
 * arbitrary expressions that derive constituent arguments from bundle arguments.
 
-For example, this is deliberately out of scope:
+This is deliberately out of scope:
 
 ```kotlin
 // NOT PROPOSED
@@ -56,7 +56,7 @@ inline annotation class Route(val path: String)
 fun users() = Unit
 ```
 
-The proposed feature supports the fixed-preset form:
+The proposed feature supports fixed presets:
 
 ```kotlin
 @RequestMapping(path = ["/users"])
@@ -66,15 +66,13 @@ inline annotation class UsersRoute
 fun users() = Unit
 ```
 
-Parameterized annotation composition is a separable language-design problem and is not required for this feature to be useful.
+Parameterized annotation composition is a separable language-design problem.
 
 ## Real-world use cases
 
 ### AndroidX Compose Preview already implements a specialized version
 
-AndroidX `@Preview` deliberately targets both `FUNCTION` and `ANNOTATION_CLASS`. Its API documentation says that annotation classes carrying `@Preview` can themselves annotate composable functions, which are then considered *indirectly annotated* with that Preview.
-
-Android's MultiPreview feature builds directly on this behavior. AndroidX ships reusable presets such as `@PreviewLightDark` where one annotation represents multiple fixed `@Preview` applications.
+AndroidX Compose MultiPreview lets an annotation class contain multiple fixed `@Preview` applications. Applying the custom annotation to a composable causes Android Studio to render the contained previews. AndroidX itself ships presets such as `@PreviewLightDark`, `@PreviewScreenSizes`, `@PreviewFontScales`, and `@PreviewDynamicColors`.
 
 References:
 
@@ -82,11 +80,11 @@ References:
 * https://developer.android.com/develop/ui/compose/tooling/previews#preview-multipreview
 * https://developer.android.com/reference/kotlin/androidx/compose/ui/tooling/preview/PreviewLightDark
 
-This is effectively fixed annotation composition implemented specifically by Android Studio Preview tooling. Other annotations and other Kotlin tooling do not inherit those semantics.
+This is effectively fixed annotation composition implemented specifically by Preview tooling. Other Kotlin annotation consumers do not inherit those semantics.
 
-### Spring Framework independently built a broader composition system
+### Spring independently built a broader composition system
 
-Spring has a much broader concept of **composed annotations**. `@GetMapping`, `@PostMapping`, etc. are composed over `@RequestMapping`, and Spring additionally provides `@AliasFor` and `MergedAnnotations` for parameter aliasing, merging and synthesis.
+Spring has a much broader concept of composed annotations. It provides composed APIs such as `@PostMapping` and infrastructure including `@AliasFor` and `MergedAnnotations` for recursive meta-annotation discovery, aliasing, merging, and synthesis.
 
 References:
 
@@ -94,15 +92,13 @@ References:
 * https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/AliasFor.html
 * https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/core/annotation/MergedAnnotations.html
 
-Spring is motivating evidence that ecosystems repeatedly need annotation composition, but this proposal does **not** attempt to standardize Spring's richer parameter-merging model. The proposed Kotlin feature is the simpler fixed-recipe subset.
+Spring is evidence that ecosystems repeatedly need annotation composition, but its parameter-merging model is explicitly outside this proposal.
 
 ### Ordinary meta-annotations cannot cover compiler-semantic annotations
 
-A constituent annotation should not have to allow `ANNOTATION_CLASS` merely because it is stored in a recipe.
+A recipe constituent should not have to allow `ANNOTATION_CLASS` merely because it participates in composition.
 
-For example, AndroidX `@Composable` currently targets `FUNCTION`, `TYPE`, `TYPE_PARAMETER`, and `PROPERTY_GETTER`; `@ReadOnlyComposable` targets `FUNCTION` and `PROPERTY_GETTER`. Neither targets `ANNOTATION_CLASS`.
-
-So this cannot be written today:
+For example, AndroidX `@Composable` and `@ReadOnlyComposable` do not target `ANNOTATION_CLASS`, so this is invalid today:
 
 ```kotlin
 @Composable
@@ -110,7 +106,7 @@ So this cannot be written today:
 annotation class ReadOnlyUi
 ```
 
-But this fixed bundle is meaningful:
+But the fixed bundle is meaningful:
 
 ```kotlin
 @Composable
@@ -121,7 +117,7 @@ inline annotation class ReadOnlyUi
 fun currentTheme(): Theme = LocalTheme.current
 ```
 
-The second form should behave exactly as though both compiler annotations were written directly on `currentTheme`.
+The second form should be checked as though both compiler-semantic annotations were written directly on `currentTheme`.
 
 References:
 
@@ -131,52 +127,60 @@ References:
 ## Proposed core semantics
 
 * `inline annotation class` declares a fixed annotation recipe.
-* Constituent annotation applications and their arguments are fixed at the recipe declaration.
+* Constituent applications and arguments are fixed at the recipe declaration.
 * Constituents do not need `AnnotationTarget.ANNOTATION_CLASS`; they are target-checked at the expanded use site.
-* Expansion is recursive and cycles are compile-time errors.
+* Expansion is recursive; cycles are compile-time errors.
 * The inline annotation use itself is absent from the effective/emitted annotation set.
 * Constituent retention is unchanged.
 * Expansion happens in the frontend before annotation-sensitive compiler plugins consume the declaration.
-* Explicit use-site targets propagate to constituents; without one, normal target defaulting applies to each expanded annotation.
-* A directly written non-repeatable annotation overrides the same annotation contributed by a bundle.
-* Repeatable annotations accumulate.
-* Recipes must work across module boundaries through Kotlin metadata.
-* There is no parameter forwarding or synthesized amalgamated parameter surface in this proposal.
+* After expansion, **ordinary Kotlin annotation semantics apply**. The feature adds no special bundle precedence; ordinary duplicate/repeatable behavior applies to the resulting annotation set.
+* Recipes must be consumable across module boundaries through compiler metadata.
+* There is no parameter forwarding or synthesized amalgamated parameter surface.
 
-## Prototype
+Use-site targets and the distinction between recipe annotations versus annotations describing the inline annotation declaration itself need precise language-design rules; those are intentionally not hidden by the prototype.
 
-There is an executable K2 / Kotlin 2.4.10 proof of concept:
+## Executable prototype
 
-https://github.com/macgills/Inline-Annotations-
+There is a Kotlin 2.4.10 / K2 proof of concept:
 
-The prototype uses a temporary `@InlineAnnotations` marker because a compiler plugin cannot make `inline` a legal modifier for annotation classes. Kotlin already parses `inline annotation class` far enough for FIR to observe it, but the built-in modifier checker rejects it.
+https://github.com/macgills/Inline-Annotations
+
+An ordinary compiler plugin cannot make `inline` a legal modifier on annotation classes or change Kotlin's built-in annotation-target applicability, so the prototype uses a temporary `@InlineAnnotations` marker and one intentionally suppressed `WRONG_ANNOTATION_TARGET` diagnostic as scaffolding.
+
+The implementation performs the meaningful expansion in FIR so the experiment exercises the required frontend model rather than only a late JVM transformation.
 
 The current tests prove:
 
-* FIR-level annotation expansion;
+* FIR-level fixed annotation expansion;
 * fixed constituent arguments;
 * nested bundles;
 * bundle removal from emitted JVM declarations;
-* class, constructor, function, field, getter, value-parameter and type-parameter targets;
-* constituents that do not target `ANNOTATION_CLASS`;
-* direct non-repeatable annotation precedence;
-* repeatable accumulation;
-* cross-module expansion from a separately compiled library.
+* class, constructor, function, field, getter, value-parameter, and type-parameter targets;
+* repeatable accumulation after expansion;
+* a constituent that does not target `ANNOTATION_CLASS`;
+* cross-module expansion from a separately compiled JVM library.
 
-The strongest proof is cross-module: the library declares a bundle containing `@CrossModuleFirst("library")` and `@CrossModuleSecond(42)`, the consumer writes only `@LibraryBundle`, and reflection verifies that the compiled consumer contains both constituent annotations with those fixed values while `LibraryBundle` itself is absent.
+The strongest test combines the last two claims. `:bundle-library` declares `@CrossModuleFirst("library")`, whose target is **only `FUNCTION`**, inside `LibraryBundle`. `:sample` uses only `@LibraryBundle`; reflection then verifies that the compiled consumer contains `@CrossModuleFirst("library")` and `@CrossModuleSecond(42)`, while `LibraryBundle` itself is absent.
 
-Known limitations / remaining work include the full annotation-target matrix, multiplatform metadata/backends, Java-source consumption, and deterministic distinction between annotations that describe the inline annotation declaration itself versus annotations that belong to its recipe.
+## Prototype limitations that are not being presented as solved
 
-Parameter forwarding is not "remaining work" for this proposal; it is explicitly out of scope.
+* The target-checking concession is implemented with `@Suppress("WRONG_ANNOTATION_TARGET")`; a real language feature must make recipe position legal directly.
+* Cross-module JVM expansion is proven only where the recipe annotations remain available in compiled symbol metadata. A real implementation needs dedicated recipe metadata independent of constituent retention, including `SOURCE`, and corresponding KLIB/common metadata.
+* The prototype detects cycles with an internal assertion, not a polished compiler diagnostic.
+* The complete target/use-site-target matrix is not tested.
+* Java-source use of an inline annotation class cannot inherit Kotlin compiler semantics automatically and needs an interoperability rule.
+* The final language design must distinguish recipe annotations from annotations intended to describe the inline annotation declaration itself.
 
-## Why this should be a language feature rather than a library/compiler-plugin convention
+Parameter forwarding is **not** a prototype limitation or future requirement of this proposal; it is explicitly out of scope.
 
-A runtime or framework convention cannot make all annotation consumers agree on the effective annotations. A late compiler transform is also too late for compiler-semantic annotations such as `@Composable`.
+## Why a language feature rather than a library/compiler-plugin convention?
 
-For predictable semantics, expansion needs to be part of the Kotlin frontend so that the language, compiler plugins, Analysis API, IDE, symbol tooling and backends share one effective annotation model.
+A framework convention cannot make all annotation consumers agree on one effective annotation set. A late compiler transformation is also too late for compiler-semantic annotations such as `@Composable`.
 
-## Full proposal draft
+For predictable semantics, expansion needs to be part of the Kotlin frontend so the language, compiler plugins, Analysis API/IDE, symbol tooling, and backends share the same effective annotations.
 
-The repository contains a KEEP-shaped design document with detailed semantics, compatibility, prototype evidence, non-goals and open questions:
+## Full design draft
 
-https://github.com/macgills/Inline-Annotations-/blob/main/proposal/inline-annotation-classes.md
+The repository contains a KEEP-shaped design document with detailed semantics, compatibility, executable evidence, non-goals, and open questions:
+
+https://github.com/macgills/Inline-Annotations/blob/main/proposal/inline-annotation-classes.md
