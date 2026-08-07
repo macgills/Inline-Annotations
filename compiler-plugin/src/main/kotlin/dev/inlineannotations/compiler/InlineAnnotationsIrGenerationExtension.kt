@@ -3,15 +3,15 @@ package dev.inlineannotations.compiler
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrMutableAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
-import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.util.deepCopyWithoutPatchingParents
-import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 
 internal class InlineAnnotationsIrGenerationExtension : IrGenerationExtension {
@@ -36,31 +36,33 @@ private class InlineAnnotationsTransformer : IrElementTransformerVoid() {
 
     private fun expand(
         annotation: IrAnnotation,
-        expansionStack: MutableSet<IrClassSymbol>,
+        expansionStack: MutableSet<ClassId>,
     ): List<IrAnnotation> {
-        val annotationClass = annotation.classSymbol.owner
+        val classId = annotation.classId ?: return listOf(annotation)
+        val annotationClass = annotation.symbol.owner.parent as? IrClass ?: return listOf(annotation)
+
         if (!annotationClass.hasAnnotation(INLINE_ANNOTATIONS_FQ_NAME)) {
             return listOf(annotation)
         }
 
-        check(expansionStack.add(annotation.classSymbol)) {
-            "Cyclic inline annotation bundle involving ${annotationClass.fqNameWhenAvailable}"
+        check(expansionStack.add(classId)) {
+            "Cyclic inline annotation bundle involving ${classId.asSingleFqName()}"
         }
 
         val expanded = annotationClass.annotations
             .asSequence()
             .filterNot(IrAnnotation::isInfrastructureAnnotation)
             .flatMap { expand(it, expansionStack).asSequence() }
-            .map(IrAnnotation::deepCopyWithoutPatchingParents)
+            .map { it.deepCopyWithoutPatchingParents() }
             .toList()
 
-        expansionStack.remove(annotation.classSymbol)
+        expansionStack.remove(classId)
         return expanded
     }
 }
 
 private fun IrAnnotation.isInfrastructureAnnotation(): Boolean {
-    val fqName = classSymbol.owner.fqNameWhenAvailable ?: return false
+    val fqName = classId?.asSingleFqName() ?: return false
     return fqName == INLINE_ANNOTATIONS_FQ_NAME || fqName in KOTLIN_ANNOTATION_META_FQ_NAMES
 }
 
