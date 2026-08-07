@@ -19,8 +19,5 @@ val compilerPluginJar = project(":compiler-plugin").tasks.named<Jar>("jar")
 
 tasks.withType<KotlinJvmCompile>().configureEach {
     dependsOn(compilerPluginJar)
-    compilerOptions.freeCompilerArgs.add(
-        compilerPluginJar.flatMap { it.archiveFile }
-            .map { "-Xplugin=${it.asFile.absolutePath}" },
-    )
+    pluginClasspath.from(compilerPluginJar.flatMap { it.archiveFile })
 }
