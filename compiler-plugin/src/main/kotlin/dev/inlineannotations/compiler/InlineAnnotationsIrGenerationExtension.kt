@@ -3,7 +3,6 @@ package dev.inlineannotations.compiler
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationBase
-import org.jetbrains.kotlin.ir.declarations.IrMutableAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.expressions.IrAnnotation
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
@@ -25,9 +24,7 @@ private class InlineAnnotationsTransformer(
 ) : IrElementTransformerVoid() {
     override fun visitDeclaration(declaration: IrDeclarationBase) =
         super.visitDeclaration(declaration).also {
-            if (declaration is IrMutableAnnotationContainer) {
-                declaration.annotations = declaration.annotations.flatMap(::expand)
-            }
+            declaration.annotations = declaration.annotations.flatMap(::expand)
         }
 
     private fun expand(annotation: IrAnnotation): List<IrAnnotation> =
@@ -65,10 +62,13 @@ private class InlineAnnotationsTransformer(
 
 private fun IrAnnotation.isInfrastructureAnnotation(): Boolean {
     val fqName = classId?.asSingleFqName() ?: return false
-    return fqName == INLINE_ANNOTATIONS_FQ_NAME || fqName in KOTLIN_ANNOTATION_META_FQ_NAMES
+    return fqName == INLINE_ANNOTATIONS_FQ_NAME ||
+        fqName == SUPPRESS_FQ_NAME ||
+        fqName in KOTLIN_ANNOTATION_META_FQ_NAMES
 }
 
 private val INLINE_ANNOTATIONS_FQ_NAME = FqName("dev.inlineannotations.InlineAnnotations")
+private val SUPPRESS_FQ_NAME = FqName("kotlin.Suppress")
 
 private val KOTLIN_ANNOTATION_META_FQ_NAMES = setOf(
     FqName("kotlin.annotation.Target"),
