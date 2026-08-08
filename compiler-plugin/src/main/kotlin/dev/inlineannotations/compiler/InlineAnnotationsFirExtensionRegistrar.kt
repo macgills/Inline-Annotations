@@ -136,7 +136,8 @@ private class InlineAnnotationsFirExpander(
             try {
                 addAll(
                     expand(
-                        annotations = annotationClass.annotations.filterNot(::isInfrastructureAnnotation),
+                        annotations = annotationClass.symbol.resolvedAnnotationsWithArguments
+                            .filterNot(::isInfrastructureAnnotation),
                         expansionStack = expansionStack,
                     ),
                 )
