@@ -1,7 +1,7 @@
 package dev.inlineannotations.metropoc
 
 import dev.inlineannotations.metrorecipes.AppScope
-import dev.inlineannotations.metrorecipes.AppScopedBinding
+import dev.inlineannotations.metrorecipes.AppScopedProvider
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.createGraph
 
@@ -14,7 +14,6 @@ public interface UserRepository {
     public fun currentUser(): User
 }
 
-@AppScopedBinding
 public class RealUserRepository : UserRepository {
     private val user = User(id = "42", displayName = "Ada")
 
@@ -25,7 +24,6 @@ public interface Analytics {
     public fun currentUserLabel(): String
 }
 
-@AppScopedBinding
 public class DefaultAnalytics(
     private val userRepository: UserRepository,
 ) : Analytics {
@@ -37,6 +35,13 @@ public class DefaultAnalytics(
 public interface AppGraph {
     public val userRepository: UserRepository
     public val analytics: Analytics
+
+    @AppScopedProvider
+    public fun provideUserRepository(): UserRepository = RealUserRepository()
+
+    @AppScopedProvider
+    public fun provideAnalytics(userRepository: UserRepository): Analytics =
+        DefaultAnalytics(userRepository)
 }
 
 public fun createAppGraph(): AppGraph = createGraph<AppGraph>()
