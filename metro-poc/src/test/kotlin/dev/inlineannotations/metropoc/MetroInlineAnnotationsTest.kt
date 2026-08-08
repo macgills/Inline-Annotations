@@ -1,5 +1,8 @@
 package dev.inlineannotations.metropoc
 
+import dev.inlineannotations.metrorecipes.AppBindingContainer
+import dev.inlineannotations.metrorecipes.AppGraph
+import dev.inlineannotations.metrorecipes.AppSingletonBinding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
