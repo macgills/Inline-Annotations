@@ -10,6 +10,12 @@ kotlin {
     jvmToolchain(21)
 }
 
+metro {
+    // Deliberate project policy for the proof: construction is always explicit with @Inject.
+    // AppScopedBinding is responsible only for contribution + lifetime semantics.
+    contributesAsInject.set(false)
+}
+
 dependencies {
     implementation(project(":metro-recipes"))
 
@@ -24,6 +30,7 @@ tasks.withType<KotlinJvmCompile>().configureEach {
     dependsOn(inlineAnnotationsCompilerPluginJar)
     pluginClasspath.from(inlineAnnotationsCompilerPluginJar.flatMap { it.archiveFile })
     compilerOptions.freeCompilerArgs.add(
+        // A language implementation would expand before third-party plugins by definition.
         "-Xcompiler-plugin-order=dev.inlineannotations>dev.zacsweers.metro",
     )
 
