@@ -1,3 +1,4 @@
+import dev.zacsweers.metro.gradle.ExperimentalMetroGradleApi
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
@@ -8,6 +9,11 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
+}
+
+@OptIn(ExperimentalMetroGradleApi::class)
+metro {
+    generateClassesInIr.set(true)
 }
 
 dependencies {
