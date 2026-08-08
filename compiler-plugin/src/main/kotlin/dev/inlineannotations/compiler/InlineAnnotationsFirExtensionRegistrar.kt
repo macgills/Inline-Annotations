@@ -82,7 +82,7 @@ private class InlineAnnotationsFirDeclarationGenerationBridge(
         classSymbol: FirClassSymbol<*>,
         context: NestedClassGenerationContext,
     ): Set<Name> {
-        expandAndReindexForOtherPlugins(classSymbol.fir, expander)
+        session.expandAndReindexForOtherPlugins(classSymbol.fir, expander)
         return emptySet()
     }
 
@@ -91,7 +91,7 @@ private class InlineAnnotationsFirDeclarationGenerationBridge(
         classSymbol: FirClassSymbol<*>,
         context: MemberGenerationContext,
     ): Set<Name> {
-        expandAndReindexForOtherPlugins(classSymbol.fir, expander)
+        session.expandAndReindexForOtherPlugins(classSymbol.fir, expander)
         return emptySet()
     }
 }
@@ -118,7 +118,7 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
         typeResolver: TypeResolveService,
     ): List<ConeKotlinType> {
         val declaration = classLikeDeclaration as? FirRegularClass ?: return emptyList()
-        expandAndReindexForOtherPlugins(declaration, expander)
+        session.expandAndReindexForOtherPlugins(declaration, expander)
         return emptyList()
     }
 }
