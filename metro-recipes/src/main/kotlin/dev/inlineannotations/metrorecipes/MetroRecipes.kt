@@ -3,25 +3,25 @@
 package dev.inlineannotations.metrorecipes
 
 import dev.inlineannotations.InlineAnnotations
-import dev.zacsweers.metro.ContributesBinding
+import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
 
 /** Application lifetime used by the Metro proof-of-concept graph. */
 public object AppScope
 
 /**
- * The repetitive Metro pattern this proof is intended to remove.
+ * A small but real Metro preset: every application-scoped provider otherwise repeats both
+ * annotations and the same scope argument.
  *
- * Without inline annotation classes every app-scoped implementation repeats both annotations and
- * the same scope argument:
+ * Without inline annotation classes:
  *
- * @ContributesBinding(AppScope::class)
+ * @Provides
  * @SingleIn(AppScope::class)
- * class RealThing : Thing
+ * fun repository(): Repository = RealRepository()
  */
 @InlineAnnotations // prototype-only binary recipe marker for downstream compilation
-@ContributesBinding(AppScope::class)
+@Provides
 @SingleIn(AppScope::class)
-@Target(AnnotationTarget.CLASS)
+@Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-public inline annotation class AppScopedBinding
+public inline annotation class AppScopedProvider
