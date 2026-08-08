@@ -82,7 +82,8 @@ private class InlineAnnotationsFirDeclarationGenerationBridge(
         classSymbol: FirClassSymbol<*>,
         context: NestedClassGenerationContext,
     ): Set<Name> {
-        session.expandAndReindexForOtherPlugins(classSymbol.fir, expander)
+        val declaration = classSymbol.fir as? FirRegularClass ?: return emptySet()
+        session.expandAndReindexForOtherPlugins(declaration, expander)
         return emptySet()
     }
 
@@ -91,7 +92,8 @@ private class InlineAnnotationsFirDeclarationGenerationBridge(
         classSymbol: FirClassSymbol<*>,
         context: MemberGenerationContext,
     ): Set<Name> {
-        session.expandAndReindexForOtherPlugins(classSymbol.fir, expander)
+        val declaration = classSymbol.fir as? FirRegularClass ?: return emptySet()
+        session.expandAndReindexForOtherPlugins(declaration, expander)
         return emptySet()
     }
 }
