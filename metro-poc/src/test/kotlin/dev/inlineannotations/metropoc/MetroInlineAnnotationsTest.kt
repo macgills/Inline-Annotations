@@ -1,6 +1,7 @@
 package dev.inlineannotations.metropoc
 
-import dev.inlineannotations.metrorecipes.AppScopedBinding
+import dev.inlineannotations.metrorecipes.Authenticated
+import dev.inlineannotations.metrorecipes.AuthenticatedAppSingleton
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -8,19 +9,18 @@ import kotlin.test.assertSame
 
 public class MetroInlineAnnotationsTest {
     @Test
-    public fun metroBuildsARealGraphFromInlineScopedBindings() {
+    public fun metroConsumesTheExpandedQualifierAndLifetimePolicy() {
         val graph = createAppGraph()
 
+        assertNull(graph.publicApiClient.authorizationHeader())
+        assertEquals("Bearer demo-token", graph.authenticatedApiClient.authorizationHeader())
+        assertSame(graph.authenticatedApiClient, graph.authenticatedApiClient)
+
+        val provider = AppGraph::class.java.getDeclaredMethod("provideAuthenticatedApiClient")
+        assertNull(provider.getAnnotation(AuthenticatedAppSingleton::class.java))
         assertEquals(
-            User(id = "42", displayName = "Ada"),
-            graph.userRepository.currentUser(),
+            Authenticated::class.java,
+            provider.getAnnotation(Authenticated::class.java).annotationClass.java,
         )
-        assertEquals("signed-in:Ada", graph.analytics.currentUserLabel())
-
-        assertSame(graph.userRepository, graph.userRepository)
-        assertSame(graph.analytics, graph.analytics)
-
-        assertNull(RealUserRepository::class.java.getAnnotation(AppScopedBinding::class.java))
-        assertNull(DefaultAnalytics::class.java.getAnnotation(AppScopedBinding::class.java))
     }
 }
