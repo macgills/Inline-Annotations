@@ -1,6 +1,6 @@
 package dev.inlineannotations.metropoc
 
-import dev.inlineannotations.metrorecipes.AppScopedProvider
+import dev.inlineannotations.metrorecipes.AppScopedBinding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -8,7 +8,7 @@ import kotlin.test.assertSame
 
 public class MetroInlineAnnotationsTest {
     @Test
-    public fun metroBuildsARealGraphFromInlineScopedProviders() {
+    public fun metroBuildsARealGraphFromInlineScopedBindings() {
         val graph = createAppGraph()
 
         assertEquals(
@@ -20,15 +20,7 @@ public class MetroInlineAnnotationsTest {
         assertSame(graph.userRepository, graph.userRepository)
         assertSame(graph.analytics, graph.analytics)
 
-        assertNull(
-            AppGraph::class.java
-                .getDeclaredMethod("provideUserRepository")
-                .getAnnotation(AppScopedProvider::class.java),
-        )
-        assertNull(
-            AppGraph::class.java
-                .getDeclaredMethod("provideAnalytics", UserRepository::class.java)
-                .getAnnotation(AppScopedProvider::class.java),
-        )
+        assertNull(RealUserRepository::class.java.getAnnotation(AppScopedBinding::class.java))
+        assertNull(DefaultAnalytics::class.java.getAnnotation(AppScopedBinding::class.java))
     }
 }
