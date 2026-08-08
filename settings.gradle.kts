@@ -17,4 +17,5 @@ rootProject.name = "inline-annotations"
 include(":annotations")
 include(":bundle-library")
 include(":compiler-plugin")
+include(":metro-poc")
 include(":sample")
