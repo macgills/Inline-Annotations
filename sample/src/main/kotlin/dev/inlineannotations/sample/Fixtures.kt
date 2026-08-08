@@ -1,7 +1,5 @@
 package dev.inlineannotations.sample
 
-import dev.inlineannotations.InlineAnnotations
-
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
     AnnotationTarget.CLASS,
@@ -28,7 +26,7 @@ public annotation class First(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Second(val number: Int)
 
-@InlineAnnotations
+@Suppress("WRONG_MODIFIER_TARGET")
 @First("expanded")
 @Second(7)
 @Target(
@@ -42,9 +40,9 @@ public annotation class Second(val number: Int)
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class Bundle
+public inline annotation class Bundle
 
-@InlineAnnotations
+@Suppress("WRONG_MODIFIER_TARGET")
 @Bundle
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
@@ -57,18 +55,18 @@ public annotation class Bundle
     AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class NestedBundle
+public inline annotation class NestedBundle
 
 @Repeatable
 @Target(AnnotationTarget.ANNOTATION_CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Tag(val value: String)
 
-@InlineAnnotations
+@Suppress("WRONG_MODIFIER_TARGET")
 @Tag("bundle")
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class TagBundle
+public inline annotation class TagBundle
 
 @NestedBundle
 public class Example @NestedBundle constructor(
