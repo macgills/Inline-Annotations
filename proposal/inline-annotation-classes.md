@@ -117,7 +117,7 @@ inline annotation class Feature
 
 `inline` communicates the same central idea as other Kotlin inline constructs: this declaration is a compile-time abstraction whose recipe is substituted at use sites rather than remaining as another semantic layer there.
 
-Kotlin 2.4.10 already parses this declaration shape far enough for FIR to observe the modifier, but the built-in modifier checker rejects `inline` on annotation classes. Making the modifier legal therefore requires a language/frontend change rather than new grammar.
+Kotlin 2.4.10 already parses this declaration shape far enough for FIR to observe the modifier. The stock modifier-applicability checker currently rejects `inline` on annotation classes, so making it valid without suppression requires a language/frontend change rather than new grammar.
 
 ### Fixed recipe semantics
 
@@ -164,7 +164,7 @@ The compiler should:
 4. apply Kotlin's **ordinary annotation rules** to the resulting set;
 5. preserve origin information for diagnostics and IDE navigation.
 
-That fourth rule is deliberately important: inline annotation classes do not introduce a second precedence system. If expansion produces duplicate non-repeatable annotations, the same rules and diagnostics should apply as if those annotations had been written directly. Repeatable annotations accumulate according to the existing language semantics.
+Inline annotation classes do not introduce a second precedence system. If expansion produces duplicate non-repeatable annotations, the same rules and diagnostics should apply as if those annotations had been written directly. Repeatable annotations accumulate according to existing language semantics.
 
 Expansion must occur before annotation-sensitive compiler plugins and frontend tooling consume the declaration. An IR-only transformation is insufficient for compiler-semantic annotations such as `@Composable`.
 
@@ -188,7 +188,7 @@ fun valid() = Unit
 
 The `@Target` on the inline annotation class constrains where the bundle itself may be used. Each constituent is independently validated after expansion at its effective use site.
 
-This is a required language change. The prototype currently crosses today's checker with one intentionally suppressed `WRONG_ANNOTATION_TARGET` diagnostic; the final feature must make recipe position legal directly.
+This is a required language change. The prototype crosses today's checker with an explicitly suppressed `WRONG_ANNOTATION_TARGET` diagnostic in the fixture that deliberately contains a `FUNCTION`-only constituent; the final feature must make recipe position legal directly.
 
 ### Use-site targets
 
@@ -223,7 +223,7 @@ Expansion cycles must be a compile-time diagnostic. The prototype currently dete
 
 ### Recipe annotations versus declaration annotations
 
-An inline annotation class can also need annotations that describe **the annotation declaration itself**, rather than form part of its recipe: `@Target`, `@Retention`, `@MustBeDocumented`, and `@Repeatable` are obvious examples.
+An inline annotation class can also need annotations that describe **the annotation declaration itself**, rather than form part of its recipe. `@Target`, `@Retention`, `@MustBeDocumented`, and `@Repeatable` are examples of declaration controls that need defined behavior.
 
 A final design must deterministically distinguish these roles.
 
@@ -241,7 +241,7 @@ Each expanded constituent follows its own retention exactly as if directly writt
 * `BINARY` is emitted where applicable;
 * `RUNTIME` remains visible to runtime reflection where supported.
 
-The **recipe**, however, must be available to downstream Kotlin compilation independently of those retention choices. A final implementation therefore needs dedicated compile-time recipe metadata rather than relying on the runtime/binary visibility of constituent annotations.
+The **recipe**, however, must be available to downstream Kotlin compilation independently of those retention choices. A final implementation therefore needs dedicated compile-time recipe metadata rather than relying on runtime/binary visibility of constituent annotations.
 
 ### Cross-module behavior and metadata
 
@@ -260,9 +260,11 @@ inline annotation class LibraryFeature
 fun operation() = Unit
 ```
 
-The current JVM prototype proves that FIR can discover and expand a fixed recipe from a separately compiled module when its recipe annotations remain available in the compiled symbol metadata.
+The current JVM prototype proves that FIR can discover and expand a fixed recipe from a separately compiled module whose source declaration itself uses `inline annotation class`.
 
-That proof is intentionally narrower than the final metadata design. It does **not** prove:
+The prototype's artifact representation is intentionally temporary. Current Kotlin metadata does not encode this proposed declaration semantic, so the compiled-library fixture retains a prototype-only `@InlineAnnotations` **binary discovery marker** and stores recipe constituents as ordinary retained annotations that a downstream compiler plugin can recover.
+
+That proof does **not** establish:
 
 * cross-module expansion of `SOURCE`-retained recipe constituents;
 * a dedicated metadata encoding for inline-annotation recipes;
@@ -301,21 +303,50 @@ The final compiler should diagnose at least:
 
 The feature should reuse ordinary diagnostics wherever substitution naturally produces an existing Kotlin error rather than inventing bundle-specific semantics.
 
-## Prototype
+## Executable prototype
 
 The executable Kotlin 2.4.10 / K2 proof is available at:
 
 https://github.com/macgills/Inline-Annotations
 
-Because a compiler plugin cannot make `inline` legal on annotation classes or redefine annotation-target applicability, the prototype uses a temporary `@InlineAnnotations` marker and one intentionally suppressed target diagnostic. The desired syntax is retained separately and intentionally still triggers Kotlin's built-in modifier diagnostic.
+The prototype compiles the **literal proposed source syntax** in ordinary `.kt` files. For example:
+
+```kotlin
+@file:Suppress("WRONG_MODIFIER_TARGET")
+
+@First("expanded")
+@Second(7)
+inline annotation class Bundle
+
+@Bundle
+inline annotation class NestedBundle
+```
+
+The suppression is a prototype boundary, not proposed syntax. Kotlin already parses the modifier and exposes `status.isInline` in FIR; the built-in applicability checker is the remaining stock-language rejection. The FIR plugin observes that actual modifier, records the annotation class as a recipe, expands uses in the frontend, and normalizes the otherwise-invalid class status before later phases.
+
+Same-module fixtures therefore do **not** use `@InlineAnnotations` as a source substitute.
+
+The strongest cross-module fixture is also a real inline annotation class:
+
+```kotlin
+@file:Suppress("WRONG_MODIFIER_TARGET", "WRONG_ANNOTATION_TARGET")
+
+@InlineAnnotations // prototype-only binary discovery metadata
+@CrossModuleFirst("library") // FUNCTION-only target
+@CrossModuleSecond(42)
+inline annotation class LibraryBundle
+```
+
+`:bundle-library` is compiled with the plugin. `:sample` depends on that compiled module and uses only `@LibraryBundle`. Reflection verifies that the consumer receives `@CrossModuleFirst("library")` and `@CrossModuleSecond(42)` while `LibraryBundle` itself is absent.
 
 The semantic implementation is FIR-first, with an IR backstop.
 
 | Semantic property | Prototype |
 | --- | --- |
+| Literal `inline annotation class` source under the prototype plugin | **Proven** |
 | FIR-level expansion | Proven |
 | Fixed constituent arguments | Proven |
-| Nested recipes | Proven |
+| Nested inline annotation recipes | Proven |
 | Bundle absent from emitted declaration | Proven |
 | Class target | Proven |
 | Constructor target | Proven |
@@ -326,8 +357,8 @@ The semantic implementation is FIR-first, with an IR backstop.
 | Type parameter target | Proven |
 | Constituent without `ANNOTATION_CLASS` target | Proven |
 | Repeatable accumulation | Proven |
-| Cross-module consumption | Proven on JVM for retained recipe annotations |
-| Stock compiler accepts `inline annotation class` | Requires language change |
+| Cross-module consumption from a real inline annotation declaration | Proven on JVM for recoverable retained recipe annotations |
+| Stock compiler accepts `inline annotation class` without the prototype suppression/plugin | Requires language change |
 | Parameter forwarding / amalgamated parameter surface | **Out of scope** |
 | Proper cycle diagnostic | Not yet implemented |
 | Full target/use-site-target matrix | Not yet complete |
@@ -336,7 +367,7 @@ The semantic implementation is FIR-first, with an IR backstop.
 | Java-source consumption | Open interoperability problem |
 | Recipe/declaration annotation disambiguation | Open language-design problem |
 
-The strongest proof is cross-module. `:bundle-library` declares a recipe containing `@CrossModuleFirst("library")`, whose target is only `FUNCTION`, plus `@CrossModuleSecond(42)`. `:sample` uses only `@LibraryBundle`. Reflection proves the compiled consumer contains both constituent annotations with their fixed values while `LibraryBundle` itself is absent.
+The important distinction is that the prototype now proves the **source shape and semantics together**. What remains unimplemented is the clean language-level removal of the two stock diagnostics and the production metadata representation—not the ability of the FIR plugin pipeline to consume the proposed syntax.
 
 ## Explicit non-goals and limitations
 
@@ -376,7 +407,7 @@ Fixed substitution has useful independent value: MultiPreview-style presets, com
 
 ### Source compatibility
 
-`inline annotation class` is currently rejected, so making it legal does not change the meaning of valid Kotlin source.
+`inline annotation class` is currently rejected by the stock modifier checker, so making it legal does not change the meaning of currently valid Kotlin source.
 
 ### Binary compatibility
 
@@ -402,11 +433,15 @@ Insufficient. Every consumer must opt into recursive discovery, recipe constitue
 
 ### Compiler-recognized marker annotation
 
-A marker such as `@ComposeAnnotations` could identify bundles, but a modifier expresses substitution as a declaration semantic more directly. The prototype uses a marker only because a compiler plugin cannot extend modifier applicability.
+A marker such as `@ComposeAnnotations` could identify bundles, but a modifier expresses substitution as a declaration semantic more directly.
+
+The executable prototype uses the literal `inline` modifier in source. Its remaining `@InlineAnnotations` marker is only temporary **cross-module binary discovery metadata**, because current Kotlin metadata has no dedicated representation for the proposed recipe semantic. It is not evidence that the source feature needs a marker.
 
 ### Compiler plugins / KSP
 
-Useful for experimentation but not a language solution. They cannot establish one universal effective annotation set for the language, other compiler plugins, IDE/Analysis API, and all backends, nor can they cleanly redefine recipe-position target validity.
+A compiler plugin is sufficient to prototype the parsed source shape and substantial frontend semantics, as this repository demonstrates. It is not a complete language solution: a plugin cannot cleanly change Kotlin's built-in modifier/target language rules for all compilation contexts, define versioned language metadata, or establish semantics that every compiler, IDE, Analysis API consumer, backend, and older compiler must understand.
+
+KSP is later still and cannot provide frontend semantics for compiler-sensitive annotations.
 
 ### Runtime recursive annotation lookup
 
