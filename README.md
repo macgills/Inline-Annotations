@@ -142,6 +142,43 @@ That establishes five important properties at once:
 
 See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/library/LibraryBundle.kt), [`CrossModuleFixture.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/CrossModuleFixture.kt), and [`CrossModuleInlineAnnotationsTest.kt`](sample/src/test/kotlin/dev/inlineannotations/sample/CrossModuleInlineAnnotationsTest.kt).
 
+## Real compiler-plugin integration: Metro
+
+The repository also contains an executable integration against **Metro 1.3.2**, deliberately using a cohesive application policy rather than synthetic annotations.
+
+The graph has public and authenticated `ApiClient` bindings of the same type. The authenticated binding must be both qualified and cached for the application lifetime. Without composition that policy is repeated on the provider:
+
+```kotlin
+@Provides
+@Authenticated
+@SingleIn(AppScope::class)
+fun provideAuthenticatedApiClient(): ApiClient =
+    RealApiClient(authorizationHeader = "Bearer demo-token")
+```
+
+The separately compiled `:metro-recipes` module names that fixed policy once:
+
+```kotlin
+@Authenticated
+@SingleIn(AppScope::class)
+inline annotation class AuthenticatedAppSingleton
+```
+
+and the Metro consumer becomes:
+
+```kotlin
+@Provides
+@AuthenticatedAppSingleton
+fun provideAuthenticatedApiClient(): ApiClient =
+    RealApiClient(authorizationHeader = "Bearer demo-token")
+```
+
+`@Provides` and `@DependencyGraph` remain direct because they describe structural Metro declarations. The inline annotation expresses only the reusable qualifier + lifetime policy.
+
+The runtime test creates Metro's generated graph and proves that Metro consumes both expanded semantics: it resolves the qualified `ApiClient` to the authenticated provider, returns the same authenticated instance on repeated access because of the expanded `@SingleIn(AppScope::class)`, emits the expanded `@Authenticated`, and does not emit `@AuthenticatedAppSingleton` itself.
+
+Metro is unmodified; it is simply another compiler plugin consuming the effective annotations. See [the Metro integration proof](docs/metro-integration.md), [`metro-recipes`](metro-recipes), and [`metro-poc`](metro-poc).
+
 ## Proposal
 
 * [KEEP-shaped design proposal](proposal/inline-annotation-classes.md)
@@ -183,6 +220,7 @@ Currently proven by executable tests on Kotlin 2.4.10:
 - a constituent that does **not** target `ANNOTATION_CLASS`
 - repeatable annotations accumulating after expansion
 - cross-module expansion from a separately compiled inline annotation class
+- real third-party compiler-plugin consumption: Metro 1.3.2 resolves an expanded qualifier and scope in an executable dependency graph
 - compiler-plugin discovery and CI
 
 Known limitations / remaining design work:
@@ -190,6 +228,7 @@ Known limitations / remaining design work:
 - stock Kotlin still requires the file-level modifier suppression; the language feature must make `inline` applicable directly
 - recipe-position target legality still requires the explicit target-checker suppression; the language feature must make recipe position legal directly
 - the cross-module artifact still uses `@InlineAnnotations` as a temporary binary marker instead of dedicated recipe metadata
+- an ordinary compiler plugin cannot emulate language-level expansion before every third-party FIR index/synthetic-declaration phase; the Metro fixture therefore keeps structural `@DependencyGraph` and `@Provides` annotations direct
 - cycle handling in the prototype is an internal assertion rather than a user-facing compiler diagnostic
 - recipe/declaration annotation disambiguation for ambiguous multi-target meta-annotations
 - the complete annotation-target/use-site-target matrix
