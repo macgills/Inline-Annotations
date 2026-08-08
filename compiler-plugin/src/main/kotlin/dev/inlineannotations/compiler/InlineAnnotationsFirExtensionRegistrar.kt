@@ -1,6 +1,6 @@
 package dev.inlineannotations.compiler
 
-import kotlinx.collections.immutable.toPersistentList
+import kotlinx.collections.immutable.persistentListOf
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.diagnostics.DiagnosticReporter
 import org.jetbrains.kotlin.fir.FirSession
@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.fir.extensions.FirSupertypeGenerationExtension
 import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.extensions.transform
+import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.name.ClassId
@@ -75,7 +76,7 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
     override fun needTransformSupertypes(declaration: FirClassLikeDeclaration): Boolean =
         declaration is FirRegularClass && declaration.annotations.isNotEmpty()
 
-    @OptIn(FirExtensionApiInternals::class)
+    @OptIn(FirExtensionApiInternals::class, SymbolInternals::class)
     override fun computeAdditionalSupertypes(
         classLikeDeclaration: FirClassLikeDeclaration,
         resolvedSupertypes: List<FirResolvedTypeRef>,
@@ -88,11 +89,12 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
         declaration.replaceAnnotations(expanded)
         session.inlineAnnotationsState.earlyExpandedClassIds += declaration.symbol.classId
 
-        val owners = session.predicateBasedProvider
-            .getOwnersOfDeclaration(declaration)
-            ?.map { it.fir }
-            ?.toPersistentList()
+        val ownerSymbols = session.predicateBasedProvider.getOwnersOfDeclaration(declaration)
             ?: return emptyList()
+        var owners = persistentListOf<FirDeclaration>()
+        for (owner in ownerSymbols) {
+            owners = owners.add(owner.fir)
+        }
 
         session.predicateBasedProvider.registerAnnotatedDeclaration(declaration, owners)
         return emptyList()
