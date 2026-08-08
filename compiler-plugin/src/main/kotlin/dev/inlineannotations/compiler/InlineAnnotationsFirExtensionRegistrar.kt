@@ -61,8 +61,9 @@ private val FirSession.inlineAnnotationsState: InlineAnnotationsFirState by FirS
  * too late for plugins such as Metro whose declaration generators query that index after SUPER_TYPES.
  *
  * A language implementation would make the effective annotation set part of the compiler's own early
- * annotation pipeline. The prototype emulates that by expanding class annotations at SUPER_TYPES and
- * re-registering the declaration in Kotlin's predicate provider. Nothing here is Metro-specific.
+ * annotation pipeline. The prototype emulates that by expanding only declarations Kotlin has already
+ * indexed as consumers of an inline-annotation recipe, then re-registering the effective annotation set
+ * in the shared predicate provider. Nothing here is Metro-specific.
  */
 private class InlineAnnotationsFirSupertypeExpansionExtension(
     session: FirSession,
@@ -74,7 +75,8 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
     }
 
     override fun needTransformSupertypes(declaration: FirClassLikeDeclaration): Boolean =
-        declaration is FirRegularClass && declaration.annotations.isNotEmpty()
+        declaration is FirRegularClass &&
+            session.predicateBasedProvider.matches(INLINE_ANNOTATIONS_META_PREDICATE, declaration)
 
     @OptIn(FirExtensionApiInternals::class, SymbolInternals::class)
     override fun computeAdditionalSupertypes(
