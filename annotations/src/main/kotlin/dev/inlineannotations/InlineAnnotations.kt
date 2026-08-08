@@ -1,9 +1,10 @@
 package dev.inlineannotations
 
 /**
- * Prototype-only marker for an annotation bundle.
+ * Prototype-only binary marker for cross-module recipe discovery.
  *
- * The language proposal replaces this marker with `inline annotation class`.
+ * Source declarations use the proposed `inline annotation class` syntax directly.
+ * A production language implementation would replace this marker with dedicated Kotlin recipe metadata.
  */
 @Target(AnnotationTarget.ANNOTATION_CLASS)
 @Retention(AnnotationRetention.BINARY)
