@@ -55,13 +55,38 @@ fun operation() = Unit
 
 Parameterized annotation composition can be considered independently later.
 
-## Proof in one test
+## Executable syntax proof
 
-The strongest small proof is deliberately cross-module and crosses today's annotation-target boundary.
+The prototype now compiles the **actual proposed source shape** in ordinary `.kt` files.
 
-`:bundle-library` declares a bundle containing one annotation that is legal **only on functions**:
+For example [`Fixtures.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/Fixtures.kt) contains:
 
 ```kotlin
+@First("expanded")
+@Second(7)
+@Target(/* ... */)
+@Retention(AnnotationRetention.RUNTIME)
+inline annotation class Bundle
+
+@Bundle
+@Target(/* ... */)
+@Retention(AnnotationRetention.RUNTIME)
+inline annotation class NestedBundle
+```
+
+Kotlin 2.4.10 already parses `inline annotation class` and exposes the modifier to FIR. Stock Kotlin then reports `WRONG_MODIFIER_TARGET`. The executable fixture suppresses that existing diagnostic at **file level** so the compiler plugin can observe `status.isInline`, register the declaration as an inline-annotation recipe, and normalize the status before later compiler phases.
+
+That is prototype scaffolding, not proposed user syntax. A real language implementation would simply make `inline` applicable to annotation classes and require no suppression.
+
+## Strongest cross-module proof
+
+The strongest proof is deliberately cross-module and also crosses today's annotation-target boundary.
+
+`:bundle-library` is itself compiled with the plugin and declares a real inline annotation class containing one annotation that is legal **only on functions**:
+
+```kotlin
+@file:Suppress("WRONG_MODIFIER_TARGET", "WRONG_ANNOTATION_TARGET")
+
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class CrossModuleFirst(val value: String)
@@ -70,14 +95,15 @@ annotation class CrossModuleFirst(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class CrossModuleSecond(val number: Int)
 
-@Suppress("WRONG_ANNOTATION_TARGET") // prototype-only concession to today's compiler
-@InlineAnnotations
+@InlineAnnotations // prototype-only binary marker for downstream module discovery
 @CrossModuleFirst("library")
 @CrossModuleSecond(42)
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class LibraryBundle
+inline annotation class LibraryBundle
 ```
+
+The `@InlineAnnotations` marker is no longer a source-syntax substitute. It remains only as temporary **compiled-artifact metadata** so a separately compiled consumer can identify the recipe. A production implementation needs dedicated Kotlin recipe metadata instead.
 
 `:sample` depends on that separately compiled library and writes only the bundle:
 
@@ -106,12 +132,13 @@ fun compiledLibraryBundleExpandsInConsumerCompilation() {
 }
 ```
 
-That establishes four important properties at once:
+That establishes five important properties at once:
 
-1. the recipe survives a separately compiled library boundary;
-2. a constituent does not need `AnnotationTarget.ANNOTATION_CLASS` merely to participate in the recipe;
-3. the consumer receives the constituent annotations and their fixed arguments; and
-4. the bundle itself is absent from the emitted consumer declaration.
+1. the actual `inline annotation class` syntax is compiled by the prototype;
+2. the recipe survives a separately compiled library boundary;
+3. a constituent does not need `AnnotationTarget.ANNOTATION_CLASS` merely to participate in the recipe;
+4. the consumer receives the constituent annotations and their fixed arguments; and
+5. the bundle itself is absent from the emitted consumer declaration.
 
 See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/library/LibraryBundle.kt), [`CrossModuleFixture.kt`](sample/src/main/kotlin/dev/inlineannotations/sample/CrossModuleFixture.kt), and [`CrossModuleInlineAnnotationsTest.kt`](sample/src/test/kotlin/dev/inlineannotations/sample/CrossModuleInlineAnnotationsTest.kt).
 
@@ -120,7 +147,7 @@ See [`LibraryBundle.kt`](bundle-library/src/main/kotlin/dev/inlineannotations/li
 * [KEEP-shaped design proposal](proposal/inline-annotation-classes.md)
 * [Language Design YouTrack submission draft](proposal/youtrack-language-design.md)
 * [Submission checklist](proposal/submission-checklist.md)
-* [Why the prototype cannot make `inline annotation class` legal](docs/language-boundary.md)
+* [Language boundaries and prototype concessions](docs/language-boundary.md)
 
 The current Kotlin KEEP process asks new language ideas to begin as a **Language Design YouTrack issue with concrete real-world use cases**, rather than as an unsolicited PR adding a new KEEP.
 
@@ -136,25 +163,33 @@ The proposal makes fixed reusable composition itself a Kotlin semantic so compil
 
 ## Prototype
 
-An ordinary compiler plugin cannot change Kotlin's built-in modifier-applicability or annotation-target rules, so the executable proof uses `@InlineAnnotations` as a temporary bootstrap marker and one intentionally suppressed `WRONG_ANNOTATION_TARGET` diagnostic. The desired `inline annotation class` form is retained in a language-boundary fixture and intentionally remains rejected by stock Kotlin.
-
 The semantic prototype is implemented in **K2 FIR**, not as an IR-only trick.
+
+The executable source uses real `inline annotation class` declarations. Two current Kotlin checks are crossed explicitly at file level:
+
+- `WRONG_MODIFIER_TARGET`, because stock Kotlin has not yet made `inline` applicable to annotation classes;
+- `WRONG_ANNOTATION_TARGET` in the cross-module fixture, because a `FUNCTION`-only recipe constituent is still initially seen by stock Kotlin as an ordinary meta-annotation.
+
+Those suppressions expose the exact language rules the proposal asks Kotlin to change. The plugin then performs the proposed frontend substitution semantics.
 
 Currently proven by executable tests on Kotlin 2.4.10:
 
+- **real `inline annotation class` source compilation under the prototype plugin**
 - FIR-level annotation expansion
 - fixed constituent arguments
-- recursive/nested bundles
+- recursive/nested inline annotation classes
 - bundle removal from emitted declarations
 - class, constructor, function, field, getter, value-parameter, and type-parameter targets
 - a constituent that does **not** target `ANNOTATION_CLASS`
 - repeatable annotations accumulating after expansion
-- cross-module expansion from a separately compiled library
+- cross-module expansion from a separately compiled inline annotation class
 - compiler-plugin discovery and CI
 
 Known limitations / remaining design work:
 
-- the prototype uses a suppression to cross today's `ANNOTATION_CLASS` target check; the language feature must make recipe position legal directly
+- stock Kotlin still requires the file-level modifier suppression; the language feature must make `inline` applicable directly
+- recipe-position target legality still requires the explicit target-checker suppression; the language feature must make recipe position legal directly
+- the cross-module artifact still uses `@InlineAnnotations` as a temporary binary marker instead of dedicated recipe metadata
 - cycle handling in the prototype is an internal assertion rather than a user-facing compiler diagnostic
 - recipe/declaration annotation disambiguation for ambiguous multi-target meta-annotations
 - the complete annotation-target/use-site-target matrix
