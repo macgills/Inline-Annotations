@@ -1,6 +1,0 @@
-@First("expanded")
-@Second(7)
-inline annotation class Bundle
-
-@Bundle
-fun operation() = Unit
