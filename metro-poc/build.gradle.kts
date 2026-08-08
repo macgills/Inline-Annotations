@@ -23,6 +23,9 @@ val inlineAnnotationsCompilerPluginJar = project(":compiler-plugin").tasks.named
 tasks.withType<KotlinJvmCompile>().configureEach {
     dependsOn(inlineAnnotationsCompilerPluginJar)
     pluginClasspath.from(inlineAnnotationsCompilerPluginJar.flatMap { it.archiveFile })
+    compilerOptions.freeCompilerArgs.add(
+        "-Xcompiler-plugin-order=dev.inlineannotations>dev.zacsweers.metro",
+    )
 
     doFirst {
         val pluginFiles = pluginClasspath.files
