@@ -145,26 +145,44 @@ There is a Kotlin 2.4.10 / K2 proof of concept:
 
 https://github.com/macgills/Inline-Annotations
 
-An ordinary compiler plugin cannot make `inline` a legal modifier on annotation classes or change Kotlin's built-in annotation-target applicability, so the prototype uses a temporary `@InlineAnnotations` marker and one intentionally suppressed `WRONG_ANNOTATION_TARGET` diagnostic as scaffolding.
+The prototype now compiles the **literal proposed declaration syntax** in ordinary `.kt` files:
+
+```kotlin
+@First("expanded")
+@Second(7)
+inline annotation class Bundle
+
+@Bundle
+inline annotation class NestedBundle
+```
+
+Kotlin 2.4.10 already parses that declaration shape and exposes the `inline` status to FIR, but the stock modifier-applicability checker reports `WRONG_MODIFIER_TARGET`. The executable fixture suppresses that existing diagnostic at file level. The FIR plugin then observes `status.isInline`, treats the annotation class as a recipe, performs expansion, and normalizes the invalid class status before later compiler phases.
+
+This means the prototype is no longer using `@InlineAnnotations` as a substitute for the proposed source syntax. Same-module bundles use `inline annotation class` directly.
 
 The implementation performs the meaningful expansion in FIR so the experiment exercises the required frontend model rather than only a late JVM transformation.
 
 The current tests prove:
 
+* compilation of real `inline annotation class` source under the prototype plugin;
 * FIR-level fixed annotation expansion;
 * fixed constituent arguments;
-* nested bundles;
+* nested inline annotation classes;
 * bundle removal from emitted JVM declarations;
 * class, constructor, function, field, getter, value-parameter, and type-parameter targets;
 * repeatable accumulation after expansion;
 * a constituent that does not target `ANNOTATION_CLASS`;
-* cross-module expansion from a separately compiled JVM library.
+* cross-module expansion from a separately compiled inline annotation class.
 
-The strongest test combines the last two claims. `:bundle-library` declares `@CrossModuleFirst("library")`, whose target is **only `FUNCTION`**, inside `LibraryBundle`. `:sample` uses only `@LibraryBundle`; reflection then verifies that the compiled consumer contains `@CrossModuleFirst("library")` and `@CrossModuleSecond(42)`, while `LibraryBundle` itself is absent.
+The strongest test combines the last two claims. `:bundle-library` is compiled with the plugin and declares a real `inline annotation class LibraryBundle` containing `@CrossModuleFirst("library")`, whose target is **only `FUNCTION`**, plus `@CrossModuleSecond(42)`. `:sample` uses only `@LibraryBundle`; reflection then verifies that the compiled consumer contains `@CrossModuleFirst("library")` and `@CrossModuleSecond(42)`, while `LibraryBundle` itself is absent.
+
+For that compiled-library case only, the prototype retains `@InlineAnnotations` as a **binary discovery marker**. Today's Kotlin metadata has no representation for the new recipe declaration semantic, so a downstream compilation needs temporary metadata telling it which compiled annotation class owns a recipe. The source declaration still uses the proposed `inline annotation class` syntax.
 
 ## Prototype limitations that are not being presented as solved
 
-* The target-checking concession is implemented with `@Suppress("WRONG_ANNOTATION_TARGET")`; a real language feature must make recipe position legal directly.
+* Stock Kotlin still reports `WRONG_MODIFIER_TARGET` for `inline annotation class`; executable fixtures suppress it at file level so the plugin can exercise the already-parsed FIR shape. A real language feature must make the modifier applicable directly.
+* A `FUNCTION`-only recipe constituent is still initially target-checked as though it were an ordinary meta-annotation, so the cross-module fixture also suppresses `WRONG_ANNOTATION_TARGET` at file level. A real language feature must make recipe position legal directly.
+* Cross-module recipe identity currently uses the prototype-only `@InlineAnnotations` binary marker. That is artifact scaffolding, not part of the proposed source syntax.
 * The prototype encodes a cross-module recipe using ordinary annotations on the bundle declaration because those are what a compiler plugin can recover from a dependency. **That is prototype scaffolding, not the desired artifact semantics.** Recipe constituents should be stored in dedicated Kotlin compile-time metadata, not exposed to Java/reflection as though they semantically annotated the inline annotation declaration itself.
 * Cross-module JVM expansion is therefore proven only where the recipe annotations remain available in compiled symbol metadata. A real implementation needs dedicated recipe metadata independent of constituent retention, including `SOURCE`, and corresponding KLIB/common metadata.
 * The prototype detects cycles with an internal assertion, not a polished compiler diagnostic.
