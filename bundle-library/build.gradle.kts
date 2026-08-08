@@ -1,6 +1,8 @@
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
+evaluationDependsOn(":compiler-plugin")
+
 plugins {
     kotlin("jvm")
 }
