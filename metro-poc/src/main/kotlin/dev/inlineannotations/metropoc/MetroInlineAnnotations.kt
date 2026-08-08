@@ -1,45 +1,36 @@
 package dev.inlineannotations.metropoc
 
 import dev.inlineannotations.metrorecipes.AppScope
-import dev.inlineannotations.metrorecipes.AppScopedBinding
+import dev.inlineannotations.metrorecipes.Authenticated
+import dev.inlineannotations.metrorecipes.AuthenticatedAppSingleton
 import dev.zacsweers.metro.DependencyGraph
-import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.createGraph
 
-public data class User(
-    public val id: String,
-    public val displayName: String,
-)
-
-public interface UserRepository {
-    public fun currentUser(): User
+public interface ApiClient {
+    public fun authorizationHeader(): String?
 }
 
-@Inject
-@AppScopedBinding
-public class RealUserRepository : UserRepository {
-    private val user = User(id = "42", displayName = "Ada")
-
-    override fun currentUser(): User = user
-}
-
-public interface Analytics {
-    public fun currentUserLabel(): String
-}
-
-@Inject
-@AppScopedBinding
-public class DefaultAnalytics(
-    private val userRepository: UserRepository,
-) : Analytics {
-    override fun currentUserLabel(): String =
-        "signed-in:${userRepository.currentUser().displayName}"
+private class RealApiClient(
+    private val authorizationHeader: String?,
+) : ApiClient {
+    override fun authorizationHeader(): String? = authorizationHeader
 }
 
 @DependencyGraph(AppScope::class)
 public interface AppGraph {
-    public val userRepository: UserRepository
-    public val analytics: Analytics
+    public val publicApiClient: ApiClient
+
+    @Authenticated
+    public val authenticatedApiClient: ApiClient
+
+    @Provides
+    public fun providePublicApiClient(): ApiClient = RealApiClient(authorizationHeader = null)
+
+    @Provides
+    @AuthenticatedAppSingleton
+    public fun provideAuthenticatedApiClient(): ApiClient =
+        RealApiClient(authorizationHeader = "Bearer demo-token")
 }
 
 public fun createAppGraph(): AppGraph = createGraph<AppGraph>()
