@@ -3,26 +3,30 @@
 package dev.inlineannotations.metrorecipes
 
 import dev.inlineannotations.InlineAnnotations
-import dev.zacsweers.metro.ContributesBinding
+import dev.zacsweers.metro.Qualifier
 import dev.zacsweers.metro.SingleIn
 
 /** Application lifetime used by the Metro proof-of-concept graph. */
 public object AppScope
 
+/** Distinguishes the authenticated API client from the public client of the same type. */
+@Qualifier
+@Target(
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.PROPERTY,
+    AnnotationTarget.PROPERTY_GETTER,
+    AnnotationTarget.VALUE_PARAMETER,
+)
+@Retention(AnnotationRetention.RUNTIME)
+public annotation class Authenticated
+
 /**
- * The repeated Metro binding pattern this proof-of-concept is intended to remove.
- *
- * In a codebase that requires explicit injection, every app-scoped interface binding otherwise
- * repeats the contribution annotation and the same scope argument twice:
- *
- * @Inject
- * @ContributesBinding(AppScope::class)
- * @SingleIn(AppScope::class)
- * class RealRepository : Repository
+ * A project policy that otherwise has to be repeated on every authenticated app-lifetime binding:
+ * the value is qualified as authenticated and cached for the lifetime of the application graph.
  */
 @InlineAnnotations // prototype-only binary recipe marker for downstream compilation
-@ContributesBinding(AppScope::class)
+@Authenticated
 @SingleIn(AppScope::class)
-@Target(AnnotationTarget.CLASS)
+@Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-public inline annotation class AppScopedBinding
+public inline annotation class AuthenticatedAppSingleton
