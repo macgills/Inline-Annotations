@@ -1,5 +1,6 @@
 package dev.inlineannotations.compiler
 
+import kotlinx.collections.immutable.toPersistentList
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.diagnostics.DiagnosticReporter
 import org.jetbrains.kotlin.fir.FirSession
@@ -9,6 +10,7 @@ import org.jetbrains.kotlin.fir.analysis.checkers.declaration.DeclarationChecker
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirTypeParameterChecker
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirValueParameterChecker
 import org.jetbrains.kotlin.fir.analysis.extensions.FirAdditionalCheckersExtension
+import org.jetbrains.kotlin.fir.declarations.FirClassLikeDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationStatus
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
@@ -18,16 +20,24 @@ import org.jetbrains.kotlin.fir.declarations.hasAnnotation
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClass
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassId
 import org.jetbrains.kotlin.fir.expressions.FirAnnotation
+import org.jetbrains.kotlin.fir.extensions.FirDeclarationPredicateRegistrar
+import org.jetbrains.kotlin.fir.extensions.FirExtensionApiInternals
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 import org.jetbrains.kotlin.fir.extensions.FirExtensionSessionComponent
 import org.jetbrains.kotlin.fir.extensions.FirStatusTransformerExtension
+import org.jetbrains.kotlin.fir.extensions.FirSupertypeGenerationExtension
+import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
+import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.extensions.transform
+import org.jetbrains.kotlin.fir.types.ConeKotlinType
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 
 internal class InlineAnnotationsFirExtensionRegistrar : FirExtensionRegistrar() {
     override fun ExtensionRegistrarContext.configurePlugin() {
         +FirExtensionSessionComponent.Factory(::InlineAnnotationsFirState)
+        +::InlineAnnotationsFirSupertypeExpansionExtension
         +::InlineAnnotationsFirStatusTransformer
         +::InlineAnnotationsFirCheckersExtension
     }
@@ -37,9 +47,57 @@ private class InlineAnnotationsFirState(
     session: FirSession,
 ) : FirExtensionSessionComponent(session) {
     val inlineAnnotationClassIds: MutableSet<ClassId> = mutableSetOf()
+    val earlyExpandedClassIds: MutableSet<ClassId> = mutableSetOf()
 }
 
 private val FirSession.inlineAnnotationsState: InlineAnnotationsFirState by FirSession.sessionComponentAccessor()
+
+/**
+ * Compatibility bridge for annotation-sensitive third-party FIR plugins.
+ *
+ * Kotlin builds its compiler-plugin annotation index before STATUS. Our original semantic prototype
+ * expanded annotations during STATUS, which is sufficient for ordinary frontend/backend consumers but
+ * too late for plugins such as Metro whose declaration generators query that index after SUPER_TYPES.
+ *
+ * A language implementation would make the effective annotation set part of the compiler's own early
+ * annotation pipeline. The prototype emulates that by expanding class annotations at SUPER_TYPES and
+ * re-registering the declaration in Kotlin's predicate provider. Nothing here is Metro-specific.
+ */
+private class InlineAnnotationsFirSupertypeExpansionExtension(
+    session: FirSession,
+) : FirSupertypeGenerationExtension(session) {
+    private val expander = InlineAnnotationsFirExpander(session)
+
+    override fun FirDeclarationPredicateRegistrar.registerPredicates() {
+        register(INLINE_ANNOTATIONS_META_PREDICATE)
+    }
+
+    override fun needTransformSupertypes(declaration: FirClassLikeDeclaration): Boolean =
+        declaration is FirRegularClass && declaration.annotations.isNotEmpty()
+
+    @OptIn(FirExtensionApiInternals::class)
+    override fun computeAdditionalSupertypes(
+        classLikeDeclaration: FirClassLikeDeclaration,
+        resolvedSupertypes: List<FirResolvedTypeRef>,
+        typeResolver: TypeResolveService,
+    ): List<ConeKotlinType> {
+        val declaration = classLikeDeclaration as? FirRegularClass ?: return emptyList()
+        val expanded = expander.expand(declaration.annotations)
+        if (expanded == declaration.annotations) return emptyList()
+
+        declaration.replaceAnnotations(expanded)
+        session.inlineAnnotationsState.earlyExpandedClassIds += declaration.symbol.classId
+
+        val owners = session.predicateBasedProvider
+            .getOwnersOfDeclaration(declaration)
+            ?.map { it.fir }
+            ?.toPersistentList()
+            ?: return emptyList()
+
+        session.predicateBasedProvider.registerAnnotatedDeclaration(declaration, owners)
+        return emptyList()
+    }
+}
 
 private class InlineAnnotationsFirStatusTransformer(
     session: FirSession,
@@ -48,7 +106,12 @@ private class InlineAnnotationsFirStatusTransformer(
 
     override fun needTransformStatus(declaration: FirDeclaration): Boolean {
         val isInlineAnnotationClass = expander.registerInlineAnnotationClass(declaration)
-        declaration.replaceAnnotations(expander.expand(declaration.annotations))
+        if (
+            declaration !is FirRegularClass ||
+            declaration.symbol.classId !in session.inlineAnnotationsState.earlyExpandedClassIds
+        ) {
+            declaration.replaceAnnotations(expander.expand(declaration.annotations))
+        }
         return isInlineAnnotationClass
     }
 
@@ -166,6 +229,10 @@ private class InlineAnnotationsFirExpander(
 }
 
 private val INLINE_ANNOTATIONS_CLASS_ID = ClassId.topLevel(FqName("dev.inlineannotations.InlineAnnotations"))
+private val INLINE_ANNOTATIONS_FQ_NAME = INLINE_ANNOTATIONS_CLASS_ID.asSingleFqName()
+private val INLINE_ANNOTATIONS_META_PREDICATE = DeclarationPredicate.create {
+    metaAnnotated(INLINE_ANNOTATIONS_FQ_NAME, includeItself = false)
+}
 private val SUPPRESS_FQ_NAME = FqName("kotlin.Suppress")
 
 private val KOTLIN_ANNOTATION_META_FQ_NAMES = setOf(
