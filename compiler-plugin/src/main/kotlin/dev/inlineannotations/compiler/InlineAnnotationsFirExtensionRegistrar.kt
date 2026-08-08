@@ -37,6 +37,7 @@ private class InlineAnnotationsFirState(
     session: FirSession,
 ) : FirExtensionSessionComponent(session) {
     val inlineAnnotationClassIds: MutableSet<ClassId> = mutableSetOf()
+    val inlineAnnotationRecipes: MutableMap<ClassId, List<FirAnnotation>> = mutableMapOf()
 }
 
 private val FirSession.inlineAnnotationsState: InlineAnnotationsFirState by FirSession.sessionComponentAccessor()
@@ -104,7 +105,25 @@ private class InlineAnnotationsFirExpander(
     fun registerInlineAnnotationClass(declaration: FirDeclaration): Boolean {
         if (!declaration.isPrototypeInlineAnnotationClass()) return false
 
-        session.inlineAnnotationsState.inlineAnnotationClassIds += (declaration as FirRegularClass).symbol.classId
+        val annotationClass = declaration as FirRegularClass
+        val classId = annotationClass.symbol.classId
+        val state = session.inlineAnnotationsState
+
+        state.inlineAnnotationClassIds += classId
+        state.inlineAnnotationRecipes[classId] =
+            annotationClass.annotations.filterNot(::isInfrastructureAnnotation)
+
+        // For source-declared inline annotation classes, recipe annotations are not semantically
+        // annotations on the bundle declaration itself. Strip them before other FIR consumers
+        // (for example Metro) inspect the declaration. The prototype binary marker is the one
+        // exception: cross-module fixtures still rely on ordinary annotation metadata as a
+        // temporary recipe encoding until dedicated Kotlin metadata exists.
+        if (!annotationClass.hasAnnotation(INLINE_ANNOTATIONS_CLASS_ID, session)) {
+            annotationClass.replaceAnnotations(
+                annotationClass.annotations.filter(::isInfrastructureAnnotation),
+            )
+        }
+
         return true
     }
 
@@ -134,9 +153,11 @@ private class InlineAnnotationsFirExpander(
             }
 
             try {
+                val recipe = session.inlineAnnotationsState.inlineAnnotationRecipes[classId]
+                    ?: annotationClass.annotations.filterNot(::isInfrastructureAnnotation)
                 addAll(
                     expand(
-                        annotations = annotationClass.annotations.filterNot(::isInfrastructureAnnotation),
+                        annotations = recipe,
                         expansionStack = expansionStack,
                     ),
                 )
