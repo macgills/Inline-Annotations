@@ -8,6 +8,7 @@ kotlin {
 
 dependencies {
     compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.10")
+    compileOnly("org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm:0.3.7")
 
     testImplementation(kotlin("test-junit"))
     testImplementation("junit:junit:4.13.2")
