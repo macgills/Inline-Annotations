@@ -9,7 +9,6 @@ import org.jetbrains.kotlin.fir.analysis.checkers.declaration.DeclarationChecker
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirTypeParameterChecker
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirValueParameterChecker
 import org.jetbrains.kotlin.fir.analysis.extensions.FirAdditionalCheckersExtension
-import org.jetbrains.kotlin.fir.declarations.FirClassLikeDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationStatus
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
@@ -19,32 +18,16 @@ import org.jetbrains.kotlin.fir.declarations.hasAnnotation
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClass
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassId
 import org.jetbrains.kotlin.fir.expressions.FirAnnotation
-import org.jetbrains.kotlin.fir.extensions.FirDeclarationGenerationExtension
-import org.jetbrains.kotlin.fir.extensions.FirDeclarationPredicateRegistrar
-import org.jetbrains.kotlin.fir.extensions.FirExtensionApiInternals
 import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 import org.jetbrains.kotlin.fir.extensions.FirExtensionSessionComponent
 import org.jetbrains.kotlin.fir.extensions.FirStatusTransformerExtension
-import org.jetbrains.kotlin.fir.extensions.FirSupertypeGenerationExtension
-import org.jetbrains.kotlin.fir.extensions.MemberGenerationContext
-import org.jetbrains.kotlin.fir.extensions.NestedClassGenerationContext
-import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
-import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.extensions.transform
-import org.jetbrains.kotlin.fir.symbols.SymbolInternals
-import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
-import org.jetbrains.kotlin.fir.types.ConeKotlinType
-import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
-import org.jetbrains.kotlin.kotlinx.collections.immutable.PersistentList
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
-import org.jetbrains.kotlin.name.Name
 
 internal class InlineAnnotationsFirExtensionRegistrar : FirExtensionRegistrar() {
     override fun ExtensionRegistrarContext.configurePlugin() {
         +FirExtensionSessionComponent.Factory(::InlineAnnotationsFirState)
-        +::InlineAnnotationsFirDeclarationGenerationBridge
-        +::InlineAnnotationsFirSupertypeExpansionExtension
         +::InlineAnnotationsFirStatusTransformer
         +::InlineAnnotationsFirCheckersExtension
     }
@@ -54,115 +37,9 @@ private class InlineAnnotationsFirState(
     session: FirSession,
 ) : FirExtensionSessionComponent(session) {
     val inlineAnnotationClassIds: MutableSet<ClassId> = mutableSetOf()
-    val earlyExpandedClassIds: MutableSet<ClassId> = mutableSetOf()
 }
 
 private val FirSession.inlineAnnotationsState: InlineAnnotationsFirState by FirSession.sessionComponentAccessor()
-
-/**
- * Earliest ordinary-plugin compatibility bridge.
- *
- * Kotlin asks declaration-generation extensions for generated member/nested names sequentially.
- * Annotation-driven plugins such as Metro make their decisions in these callbacks. The language
- * feature would expose the already-expanded effective annotation set before any plugin callback;
- * this prototype emulates that by expanding and re-indexing a declaration as our no-op generator is
- * queried, before later generators inspect the same symbol.
- */
-private class InlineAnnotationsFirDeclarationGenerationBridge(
-    session: FirSession,
-) : FirDeclarationGenerationExtension(session) {
-    private val expander = InlineAnnotationsFirExpander(session)
-
-    override fun FirDeclarationPredicateRegistrar.registerPredicates() {
-        register(INLINE_ANNOTATIONS_META_PREDICATE)
-    }
-
-    @OptIn(SymbolInternals::class)
-    override fun getNestedClassifiersNames(
-        classSymbol: FirClassSymbol<*>,
-        context: NestedClassGenerationContext,
-    ): Set<Name> {
-        val declaration = classSymbol.fir as? FirRegularClass ?: return emptySet()
-        session.expandAndReindexForOtherPlugins(declaration, expander)
-        return emptySet()
-    }
-
-    @OptIn(SymbolInternals::class)
-    override fun getCallableNamesForClass(
-        classSymbol: FirClassSymbol<*>,
-        context: MemberGenerationContext,
-    ): Set<Name> {
-        val declaration = classSymbol.fir as? FirRegularClass ?: return emptySet()
-        session.expandAndReindexForOtherPlugins(declaration, expander)
-        return emptySet()
-    }
-}
-
-/**
- * Secondary bridge for annotation-sensitive frontend consumers after supertype resolution.
- */
-private class InlineAnnotationsFirSupertypeExpansionExtension(
-    session: FirSession,
-) : FirSupertypeGenerationExtension(session) {
-    private val expander = InlineAnnotationsFirExpander(session)
-
-    override fun FirDeclarationPredicateRegistrar.registerPredicates() {
-        register(INLINE_ANNOTATIONS_META_PREDICATE)
-    }
-
-    override fun needTransformSupertypes(declaration: FirClassLikeDeclaration): Boolean =
-        declaration is FirRegularClass &&
-            session.predicateBasedProvider.matches(INLINE_ANNOTATIONS_META_PREDICATE, declaration)
-
-    override fun computeAdditionalSupertypes(
-        classLikeDeclaration: FirClassLikeDeclaration,
-        resolvedSupertypes: List<FirResolvedTypeRef>,
-        typeResolver: TypeResolveService,
-    ): List<ConeKotlinType> {
-        val declaration = classLikeDeclaration as? FirRegularClass ?: return emptyList()
-        session.expandAndReindexForOtherPlugins(declaration, expander)
-        return emptyList()
-    }
-}
-
-@OptIn(FirExtensionApiInternals::class, SymbolInternals::class)
-private fun FirSession.expandAndReindexForOtherPlugins(
-    declaration: FirRegularClass,
-    expander: InlineAnnotationsFirExpander,
-) {
-    if (declaration.symbol.classId in inlineAnnotationsState.earlyExpandedClassIds) return
-    if (!predicateBasedProvider.matches(INLINE_ANNOTATIONS_META_PREDICATE, declaration)) return
-
-    val expanded = expander.expand(declaration.annotations)
-    if (expanded == declaration.annotations) return
-
-    declaration.replaceAnnotations(expanded)
-    inlineAnnotationsState.earlyExpandedClassIds += declaration.symbol.classId
-
-    val ownerSymbols = predicateBasedProvider.getOwnersOfDeclaration(declaration) ?: return
-    var owners = emptyCompilerPersistentList<FirDeclaration>()
-    for (owner in ownerSymbols) {
-        owners = owners.add(owner.fir)
-    }
-    predicateBasedProvider.registerAnnotatedDeclaration(declaration, owners)
-}
-
-/**
- * kotlin-compiler-embeddable relocates kotlinx.collections.immutable bytecode into
- * org.jetbrains.kotlin.kotlinx.collections.immutable, but the relocated top-level factory retains
- * source metadata for the original package and therefore cannot be imported from Kotlin source.
- * The interface type itself is visible, so only construction is reflected here.
- */
-@Suppress("UNCHECKED_CAST")
-private fun <T> emptyCompilerPersistentList(): PersistentList<T> {
-    val extensionsClass = Class.forName(
-        "org.jetbrains.kotlin.kotlinx.collections.immutable.ExtensionsKt",
-    )
-    val factory = extensionsClass.methods.single {
-        it.name == "persistentListOf" && it.parameterCount == 1 && it.parameterTypes.single().isArray
-    }
-    return factory.invoke(null, emptyArray<Any?>()) as PersistentList<T>
-}
 
 private class InlineAnnotationsFirStatusTransformer(
     session: FirSession,
@@ -171,12 +48,7 @@ private class InlineAnnotationsFirStatusTransformer(
 
     override fun needTransformStatus(declaration: FirDeclaration): Boolean {
         val isInlineAnnotationClass = expander.registerInlineAnnotationClass(declaration)
-        if (
-            declaration !is FirRegularClass ||
-            declaration.symbol.classId !in session.inlineAnnotationsState.earlyExpandedClassIds
-        ) {
-            declaration.replaceAnnotations(expander.expand(declaration.annotations))
-        }
+        declaration.replaceAnnotations(expander.expand(declaration.annotations))
         return isInlineAnnotationClass
     }
 
@@ -294,10 +166,6 @@ private class InlineAnnotationsFirExpander(
 }
 
 private val INLINE_ANNOTATIONS_CLASS_ID = ClassId.topLevel(FqName("dev.inlineannotations.InlineAnnotations"))
-private val INLINE_ANNOTATIONS_FQ_NAME = INLINE_ANNOTATIONS_CLASS_ID.asSingleFqName()
-private val INLINE_ANNOTATIONS_META_PREDICATE = DeclarationPredicate.create {
-    metaAnnotated(INLINE_ANNOTATIONS_FQ_NAME, includeItself = false)
-}
 private val SUPPRESS_FQ_NAME = FqName("kotlin.Suppress")
 
 private val KOTLIN_ANNOTATION_META_FQ_NAMES = setOf(
