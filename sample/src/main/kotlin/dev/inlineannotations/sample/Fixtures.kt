@@ -1,3 +1,5 @@
+@file:Suppress("WRONG_MODIFIER_TARGET")
+
 package dev.inlineannotations.sample
 
 @Target(
@@ -26,7 +28,6 @@ public annotation class First(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Second(val number: Int)
 
-@Suppress("WRONG_MODIFIER_TARGET")
 @First("expanded")
 @Second(7)
 @Target(
@@ -42,7 +43,6 @@ public annotation class Second(val number: Int)
 @Retention(AnnotationRetention.RUNTIME)
 public inline annotation class Bundle
 
-@Suppress("WRONG_MODIFIER_TARGET")
 @Bundle
 @Target(
     AnnotationTarget.ANNOTATION_CLASS,
@@ -62,7 +62,6 @@ public inline annotation class NestedBundle
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class Tag(val value: String)
 
-@Suppress("WRONG_MODIFIER_TARGET")
 @Tag("bundle")
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
