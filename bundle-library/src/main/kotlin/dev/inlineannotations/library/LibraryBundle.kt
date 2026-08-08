@@ -10,10 +10,10 @@ public annotation class CrossModuleFirst(val value: String)
 @Retention(AnnotationRetention.RUNTIME)
 public annotation class CrossModuleSecond(val number: Int)
 
-@Suppress("WRONG_ANNOTATION_TARGET")
-@InlineAnnotations
+@Suppress("WRONG_MODIFIER_TARGET", "WRONG_ANNOTATION_TARGET")
+@InlineAnnotations // prototype-only binary marker for downstream module discovery
 @CrossModuleFirst("library")
 @CrossModuleSecond(42)
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-public annotation class LibraryBundle
+public inline annotation class LibraryBundle
