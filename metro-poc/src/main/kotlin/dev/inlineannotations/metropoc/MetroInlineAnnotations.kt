@@ -3,6 +3,7 @@ package dev.inlineannotations.metropoc
 import dev.inlineannotations.metrorecipes.AppBindingContainer
 import dev.inlineannotations.metrorecipes.AppGraph
 import dev.inlineannotations.metrorecipes.AppSingletonBinding
+import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.createGraph
 
@@ -14,11 +15,13 @@ public interface Clock {
     public fun now(): Long
 }
 
+@Inject
 @AppSingletonBinding
 public class RealAnalytics : Analytics {
     override fun event(): String = "metro-inline"
 }
 
+@Inject
 @AppSingletonBinding
 public class SystemClock : Clock {
     override fun now(): Long = 42L
