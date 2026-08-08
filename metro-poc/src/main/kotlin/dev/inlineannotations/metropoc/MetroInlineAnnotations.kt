@@ -1,33 +1,10 @@
-@file:Suppress("WRONG_MODIFIER_TARGET", "WRONG_ANNOTATION_TARGET")
-
 package dev.inlineannotations.metropoc
 
-import dev.zacsweers.metro.BindingContainer
-import dev.zacsweers.metro.ContributesBinding
-import dev.zacsweers.metro.ContributesTo
-import dev.zacsweers.metro.DependencyGraph
+import dev.inlineannotations.metrorecipes.AppBindingContainer
+import dev.inlineannotations.metrorecipes.AppGraph
+import dev.inlineannotations.metrorecipes.AppSingletonBinding
 import dev.zacsweers.metro.Provides
-import dev.zacsweers.metro.SingleIn
 import dev.zacsweers.metro.createGraph
-
-public object AppScope
-
-@DependencyGraph(AppScope::class)
-@Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.RUNTIME)
-public inline annotation class AppGraph
-
-@ContributesBinding(AppScope::class)
-@SingleIn(AppScope::class)
-@Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.RUNTIME)
-public inline annotation class AppSingletonBinding
-
-@ContributesTo(AppScope::class)
-@BindingContainer
-@Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.RUNTIME)
-public inline annotation class AppBindingContainer
 
 public interface Analytics {
     public fun event(): String
