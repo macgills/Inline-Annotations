@@ -31,7 +31,7 @@ import org.jetbrains.kotlin.fir.extensions.transform
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
-import org.jetbrains.kotlin.kotlinx.collections.immutable.persistentListOf
+import org.jetbrains.kotlin.kotlinx.collections.immutable.PersistentList
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 
@@ -91,7 +91,7 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
 
         val ownerSymbols = session.predicateBasedProvider.getOwnersOfDeclaration(declaration)
             ?: return emptyList()
-        var owners = persistentListOf<FirDeclaration>()
+        var owners = emptyCompilerPersistentList<FirDeclaration>()
         for (owner in ownerSymbols) {
             owners = owners.add(owner.fir)
         }
@@ -99,6 +99,23 @@ private class InlineAnnotationsFirSupertypeExpansionExtension(
         session.predicateBasedProvider.registerAnnotatedDeclaration(declaration, owners)
         return emptyList()
     }
+}
+
+/**
+ * kotlin-compiler-embeddable relocates kotlinx.collections.immutable bytecode into
+ * org.jetbrains.kotlin.kotlinx.collections.immutable, but the relocated top-level factory retains
+ * source metadata for the original package and therefore cannot be imported from Kotlin source.
+ * The interface type itself is visible, so only construction is reflected here.
+ */
+@Suppress("UNCHECKED_CAST")
+private fun <T> emptyCompilerPersistentList(): PersistentList<T> {
+    val extensionsClass = Class.forName(
+        "org.jetbrains.kotlin.kotlinx.collections.immutable.ExtensionsKt",
+    )
+    val factory = extensionsClass.methods.single {
+        it.name == "persistentListOf" && it.parameterCount == 1 && it.parameterTypes.single().isArray
+    }
+    return factory.invoke(null, emptyArray<Any?>()) as PersistentList<T>
 }
 
 private class InlineAnnotationsFirStatusTransformer(
