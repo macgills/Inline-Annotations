@@ -1,8 +1,6 @@
 package dev.inlineannotations.metropoc
 
-import dev.inlineannotations.metrorecipes.AppBindingContainer
-import dev.inlineannotations.metrorecipes.AppGraph
-import dev.inlineannotations.metrorecipes.AppSingletonBinding
+import dev.inlineannotations.metrorecipes.AppScopedBinding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -10,19 +8,19 @@ import kotlin.test.assertSame
 
 public class MetroInlineAnnotationsTest {
     @Test
-    public fun metroConsumesExpandedInlineAnnotations() {
-        val graph = createDemoGraph()
+    public fun metroBuildsAnAppGraphFromInlineScopedBindings() {
+        val graph = createAppGraph()
 
-        assertEquals("metro-inline", graph.analytics.event())
-        assertEquals(42L, graph.clock.now())
-        assertEquals("https://api.example.test", graph.endpoint.value)
+        assertEquals(
+            User(id = "42", displayName = "Ada"),
+            graph.userRepository.currentUser(),
+        )
+        assertEquals("signed-in:Ada", graph.analytics.currentUserLabel())
 
+        assertSame(graph.userRepository, graph.userRepository)
         assertSame(graph.analytics, graph.analytics)
-        assertSame(graph.clock, graph.clock)
 
-        assertNull(RealAnalytics::class.java.getAnnotation(AppSingletonBinding::class.java))
-        assertNull(SystemClock::class.java.getAnnotation(AppSingletonBinding::class.java))
-        assertNull(DemoGraph::class.java.getAnnotation(AppGraph::class.java))
-        assertNull(NetworkBindings::class.java.getAnnotation(AppBindingContainer::class.java))
+        assertNull(RealUserRepository::class.java.getAnnotation(AppScopedBinding::class.java))
+        assertNull(DefaultAnalytics::class.java.getAnnotation(AppScopedBinding::class.java))
     }
 }
