@@ -4,6 +4,8 @@ import dev.inlineannotations.metrorecipes.Authenticated
 import dev.inlineannotations.metrorecipes.AuthenticatedAppSingleton
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
@@ -12,15 +14,16 @@ public class MetroInlineAnnotationsTest {
     public fun metroConsumesTheExpandedQualifierAndLifetimePolicy() {
         val graph = createAppGraph()
 
-        assertNull(graph.publicApiClient.authorizationHeader())
-        assertEquals("Bearer demo-token", graph.authenticatedApiClient.authorizationHeader())
-        assertSame(graph.authenticatedApiClient, graph.authenticatedApiClient)
+        val publicClient = graph.publicApiClient
+        val authenticatedClient = graph.authenticatedApiClient
+
+        assertNull(publicClient.authorizationHeader())
+        assertEquals("Bearer demo-token", authenticatedClient.authorizationHeader())
+        assertNotSame(publicClient, authenticatedClient)
+        assertSame(authenticatedClient, graph.authenticatedApiClient)
 
         val provider = AppGraph::class.java.getDeclaredMethod("provideAuthenticatedApiClient")
         assertNull(provider.getAnnotation(AuthenticatedAppSingleton::class.java))
-        assertEquals(
-            Authenticated::class.java,
-            provider.getAnnotation(Authenticated::class.java).annotationClass.java,
-        )
+        assertNotNull(provider.getAnnotation(Authenticated::class.java))
     }
 }
